@@ -15,7 +15,7 @@ async function launch(name) {
   return { app, page }
 }
 async function signIn(c, email, pw) {
-  await c.page.getByLabel('Email').fill(email); await c.page.getByLabel('Password').fill(pw)
+  await c.page.getByLabel('Email').fill(email); await c.page.getByLabel('Password', { exact: true }).fill(pw)
   await c.page.getByRole('button', { name: 'Sign in' }).click()
 }
 const nav = (c, l) => c.page.getByRole('navigation').getByRole('link', { name: l }).click()

@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { useQuery, useStatus } from '@powersync/react'
+import { useStatus } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { db } from '@/powersync/db'
 import { useAuth } from './auth'
 import type { OrgMember } from '@/powersync/AppSchema'
@@ -12,7 +13,7 @@ export interface Me extends OrgMember {
 /** The signed-in technician's membership row + company name (synced). */
 export function useMe(): { me: Me | null; isLoading: boolean } {
   const { user } = useAuth()
-  const { data, isLoading } = useQuery<Me>(
+  const { data, isLoading } = useRows<Me>(
     `SELECT m.*, o.name AS org_name FROM org_members m
      LEFT JOIN organizations o ON o.id = m.org_id
      WHERE m.user_id = ? LIMIT 1`,

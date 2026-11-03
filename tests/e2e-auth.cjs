@@ -36,7 +36,7 @@ const nav = (c, label) => c.page.getByRole('navigation').getByRole('link', { nam
 const shot = (c, n) => OUT && c.page.screenshot({ path: path.join(OUT, n + '.png') })
 async function signIn(c, email, pw = PW) {
   await c.page.getByLabel('Email').fill(email)
-  await c.page.getByLabel('Password').fill(pw)
+  await c.page.getByLabel('Password', { exact: true }).fill(pw)
   await c.page.getByRole('button', { name: 'Sign in' }).click()
 }
 
@@ -59,7 +59,7 @@ async function signIn(c, email, pw = PW) {
   // ---------- 2. Offline: sign out and back in without internet
   await nav(A, 'Customers')
   setOffline(true); await browserOffline(A, true)
-  await A.page.getByTestId('sync-indicator').filter({ hasText: 'Offline' }).waitFor({ timeout: 30000 })
+  await A.page.getByTestId('sync-indicator').filter({ hasText: 'Offline' }).first().waitFor({ timeout: 30000 })
   await A.page.getByRole('button', { name: 'New customer' }).first().click()
   await A.page.getByRole('dialog').getByLabel('Company / customer name *').fill('Offline Customer Co')
   await A.page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()

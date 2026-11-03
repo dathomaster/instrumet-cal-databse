@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { Pencil, Plus, Wrench } from 'lucide-react'
 import { Button, Card, CardHeader, DetailGrid, EmptyState, PageHeader, td, th } from '@/components/ui'
 import { BackLink } from '@/components/BackLink'
@@ -16,8 +16,8 @@ export function CustomerDetail() {
   const nav = useNavigate()
   const [editing, setEditing] = useState(false)
   const [addingEq, setAddingEq] = useState(false)
-  const { data: rows, isLoading } = useQuery<Customer & { id: string }>('SELECT * FROM customers WHERE id = ?', [id])
-  const { data: equipment } = useQuery<Equipment & { id: string }>(
+  const { data: rows, isLoading } = useRows<Customer & { id: string }>('SELECT * FROM customers WHERE id = ?', [id])
+  const { data: equipment } = useRows<Equipment & { id: string }>(
     `SELECT * FROM equipment WHERE customer_id = ? ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, next_due_at IS NULL, next_due_at`,
     [id]
   )
@@ -61,18 +61,7 @@ export function CustomerDetail() {
           <table className="w-full">
             <thead className="bg-slate-50/60"><tr><th className={th}>Description</th><th className={th}>Make / model</th><th className={th}>Serial</th><th className={th}>Last cal</th><th className={th}>Status</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {equipment.map((e) => (
-                <tr key={e.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/equipment/${e.id}`)}>
-                  <td className={td}>
-                    <Link to={`/equipment/${e.id}`} className="font-medium text-slate-800">{e.description}</Link>
-                    {e.asset_tag && <div className="text-xs text-slate-500">Tag {e.asset_tag}</div>}
-                  </td>
-                  <td className={`${td} text-slate-600`}>{joinNonEmpty([e.manufacturer, e.model], ' ') || '—'}</td>
-                  <td className={`${td} font-mono text-xs text-slate-600`}>{e.serial_number || '—'}</td>
-                  <td className={`${td} text-slate-600`}>{fmtDate(e.last_calibrated_at)}</td>
-                  <td className={td}>{e.status === 'active' ? <DueBadge date={e.next_due_at} /> : <span className="text-xs capitalize text-slate-500">{e.status?.replace(/_/g, ' ')}</span>}</td>
-                </tr>
-              ))}
+              {equipment.map((e) => <EquipmentRow key={e.id} e={e} />)}
             </tbody>
           </table>
         )}
@@ -82,3 +71,20 @@ export function CustomerDetail() {
     </>
   )
 }
+
+/** Memoized: re-renders only when this row's data changes. */
+const EquipmentRow = memo(function EquipmentRow({ e }: { e: Equipment & { id: string } }) {
+  const nav = useNavigate()
+  return (
+    <tr className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/equipment/${e.id}`)}>
+      <td className={td}>
+        <Link to={`/equipment/${e.id}`} className="font-medium text-slate-800">{e.description}</Link>
+        {e.asset_tag && <div className="text-xs text-slate-500">Tag {e.asset_tag}</div>}
+      </td>
+      <td className={`${td} text-slate-600`}>{joinNonEmpty([e.manufacturer, e.model], ' ') || '—'}</td>
+      <td className={`${td} font-mono text-xs text-slate-600`}>{e.serial_number || '—'}</td>
+      <td className={`${td} text-slate-600`}>{fmtDate(e.last_calibrated_at)}</td>
+      <td className={td}>{e.status === 'active' ? <DueBadge date={e.next_due_at} /> : <span className="text-xs capitalize text-slate-500">{e.status?.replace(/_/g, ' ')}</span>}</td>
+    </tr>
+  )
+})

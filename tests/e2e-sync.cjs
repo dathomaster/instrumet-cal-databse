@@ -42,7 +42,7 @@ const setOffline = async (_c, offline) => {
 
 async function login(c, email) {
   await c.page.getByLabel('Email').fill(email)
-  await c.page.getByLabel('Password').fill(PW)
+  await c.page.getByLabel('Password', { exact: true }).fill(PW)
   await c.page.getByRole('button', { name: 'Sign in' }).click()
   await c.page.getByText('Welcome back').waitFor({ timeout: 60000 })
   log(c.name, 'signed in, dashboard visible')

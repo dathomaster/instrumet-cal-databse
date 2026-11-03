@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { config } from '@/lib/config'
-import { useQuery, useStatus } from '@powersync/react'
+import { useStatus } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { AlertTriangle, Check, LogOut, X } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, Field, Modal, PageHeader, Select, td, th } from '@/components/ui'
 import { AutoInput } from '@/components/AutoInput'
@@ -20,11 +21,11 @@ export function Settings() {
   const pending = usePendingUploads()
   const [confirmOut, setConfirmOut] = useState(false)
   const isAdmin = me?.role === 'admin'
-  const { data: members } = useQuery<OrgMember & { id: string }>(
+  const { data: members } = useRows<OrgMember & { id: string }>(
     "SELECT * FROM org_members ORDER BY role = 'pending' DESC, full_name COLLATE NOCASE"
   )
   const pendingMembers = members.filter((m) => m.role === 'pending')
-  const { data: errors } = useQuery<UploadError & { id: string }>('SELECT * FROM upload_errors ORDER BY created_at DESC')
+  const { data: errors } = useRows<UploadError & { id: string }>('SELECT * FROM upload_errors ORDER BY created_at DESC')
 
   return (
     <>
@@ -96,37 +97,7 @@ export function Settings() {
           <table className="w-full">
             <thead className="bg-slate-50/60"><tr><th className={th}>Name</th><th className={th}>Email</th><th className={th}>Role</th>{isAdmin && <th className={th} />}</tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {members.map((m) => (
-                <tr key={m.id}>
-                  <td className={`${td} font-medium text-slate-800`}>{m.full_name || '—'}{m.user_id === user?.id && <span className="ml-2 text-xs text-slate-400">(you)</span>}</td>
-                  <td className={`${td} text-slate-600`}>{m.email}</td>
-                  <td className={td}>
-                    {m.role === 'pending' ? (
-                      isAdmin ? (
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => updateRow('org_members', m.id, { role: 'technician' }, { role: m.role })}><Check size={14} />Approve</Button>
-                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => confirm(`Decline ${m.email}? They won't get access to any data.`) && deleteRow('org_members', m.id)}>Decline</Button>
-                        </div>
-                      ) : <Badge tone="amber">Waiting for approval</Badge>
-                    ) : isAdmin && m.user_id !== user?.id ? (
-                      <Select value={m.role ?? 'technician'} onChange={(e) => updateRow('org_members', m.id, { role: e.target.value }, { role: m.role })} className="w-36 py-1">
-                        <option value="technician">Technician</option>
-                        <option value="admin">Admin</option>
-                      </Select>
-                    ) : <span className="text-sm capitalize text-slate-600">{m.role}</span>}
-                  </td>
-                  {isAdmin && (
-                    <td className={`${td} text-right`}>
-                      {m.user_id !== user?.id && m.role !== 'pending' && (
-                        <div className="flex justify-end gap-1">
-                          <ResetPasswordButton member={m} />
-                          <RemoveMemberButton member={m} />
-                        </div>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {members.map((m) => <MemberRow key={m.id} m={m} isAdmin={isAdmin} currentUserId={user?.id} />)}
             </tbody>
           </table>
         </Card>
@@ -145,3 +116,38 @@ export function Settings() {
     </>
   )
 }
+
+/** Memoized: re-renders only when this member's data (or your admin status) changes. */
+const MemberRow = memo(function MemberRow({ m, isAdmin, currentUserId }: { m: OrgMember & { id: string }; isAdmin: boolean; currentUserId?: string }) {
+  return (
+    <tr>
+      <td className={`${td} font-medium text-slate-800`}>{m.full_name || '—'}{m.user_id === currentUserId && <span className="ml-2 text-xs text-slate-400">(you)</span>}</td>
+      <td className={`${td} text-slate-600`}>{m.email}</td>
+      <td className={td}>
+        {m.role === 'pending' ? (
+          isAdmin ? (
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => updateRow('org_members', m.id, { role: 'technician' }, { role: m.role })}><Check size={14} />Approve</Button>
+              <Button size="sm" variant="ghost" className="text-red-600" onClick={() => confirm(`Decline ${m.email}? They won't get access to any data.`) && deleteRow('org_members', m.id)}>Decline</Button>
+            </div>
+          ) : <Badge tone="amber">Waiting for approval</Badge>
+        ) : isAdmin && m.user_id !== currentUserId ? (
+          <Select value={m.role ?? 'technician'} onChange={(e) => updateRow('org_members', m.id, { role: e.target.value }, { role: m.role })} className="w-36 py-1">
+            <option value="technician">Technician</option>
+            <option value="admin">Admin</option>
+          </Select>
+        ) : <span className="text-sm capitalize text-slate-600">{m.role}</span>}
+      </td>
+      {isAdmin && (
+        <td className={`${td} text-right`}>
+          {m.user_id !== currentUserId && m.role !== 'pending' && (
+            <div className="flex justify-end gap-1">
+              <ResetPasswordButton member={m} />
+              <RemoveMemberButton member={m} />
+            </div>
+          )}
+        </td>
+      )}
+    </tr>
+  )
+})

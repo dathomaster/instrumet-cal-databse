@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { ClipboardCheck, Pencil, Plus } from 'lucide-react'
 import { Button, Card, CardHeader, DetailGrid, EmptyState, PageHeader, td, th } from '@/components/ui'
 import { BackLink } from '@/components/BackLink'
@@ -20,11 +20,11 @@ export function EquipmentDetail() {
   const { me } = useMe()
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
-  const { data: rows, isLoading } = useQuery<Equipment & { id: string; customer_name: string }>(
+  const { data: rows, isLoading } = useRows<Equipment & { id: string; customer_name: string }>(
     'SELECT e.*, c.name AS customer_name FROM equipment e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?',
     [id]
   )
-  const { data: cals } = useQuery<Calibration & { id: string; points: number }>(
+  const { data: cals } = useRows<Calibration & { id: string; points: number }>(
     `SELECT k.*, (SELECT count(*) FROM calibration_points p WHERE p.calibration_id = k.id) AS points
      FROM calibrations k WHERE k.equipment_id = ? ORDER BY k.performed_at DESC, k.created_at DESC`,
     [id]
@@ -80,22 +80,7 @@ export function EquipmentDetail() {
           <table className="w-full">
             <thead className="bg-slate-50/60"><tr><th className={th}>Date</th><th className={th}>Certificate</th><th className={th}>Technician</th><th className={th}>Points</th><th className={th}>As found</th><th className={th}>As left</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {cals.map((k) => (
-                <tr key={k.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/calibrations/${k.id}`)}>
-                  <td className={td}><Link to={`/calibrations/${k.id}`} className="font-medium text-slate-800">{fmtDate(k.performed_at)}</Link></td>
-                  <td className={`${td} font-mono text-xs text-slate-600`}>{k.certificate_number}</td>
-                  <td className={`${td} text-slate-600`}>{k.technician_name || '—'}</td>
-                  <td className={`${td} text-slate-600`}>{k.points}</td>
-                  {k.status === 'draft' ? (
-                    <td className={td} colSpan={2}><span className="text-xs font-medium text-sky-700">Draft — in progress</span></td>
-                  ) : (
-                    <>
-                      <td className={td}><ResultBadge result={k.as_found_result} /></td>
-                      <td className={td}><ResultBadge result={k.as_left_result} /></td>
-                    </>
-                  )}
-                </tr>
-              ))}
+              {cals.map((k) => <CalibrationRow key={k.id} k={k} />)}
             </tbody>
           </table>
         )}
@@ -104,3 +89,24 @@ export function EquipmentDetail() {
     </>
   )
 }
+
+/** Memoized: re-renders only when this row's data changes. */
+const CalibrationRow = memo(function CalibrationRow({ k }: { k: Calibration & { id: string; points: number } }) {
+  const nav = useNavigate()
+  return (
+    <tr className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/calibrations/${k.id}`)}>
+      <td className={td}><Link to={`/calibrations/${k.id}`} className="font-medium text-slate-800">{fmtDate(k.performed_at)}</Link></td>
+      <td className={`${td} font-mono text-xs text-slate-600`}>{k.certificate_number}</td>
+      <td className={`${td} text-slate-600`}>{k.technician_name || '—'}</td>
+      <td className={`${td} text-slate-600`}>{k.points}</td>
+      {k.status === 'draft' ? (
+        <td className={td} colSpan={2}><span className="text-xs font-medium text-sky-700">Draft — in progress</span></td>
+      ) : (
+        <>
+          <td className={td}><ResultBadge result={k.as_found_result} /></td>
+          <td className={td}><ResultBadge result={k.as_left_result} /></td>
+        </>
+      )}
+    </tr>
+  )
+})

@@ -1,19 +1,20 @@
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { AlertTriangle, CalendarClock, ClipboardCheck, Users, Wrench } from 'lucide-react'
 import { Card, CardHeader, EmptyState, PageHeader, td, th } from '@/components/ui'
 import { DueBadge, ResultBadge } from '@/components/DueBadge'
 import { addDays, DUE_SOON_DAYS, fmtDate, todayISO } from '@/lib/format'
 import { useMe } from '@/lib/hooks'
 
-interface DueRow { id: string; description: string; serial_number: string | null; next_due_at: string | null; customer_name: string; customer_id: string }
+interface DueRowData { id: string; description: string; serial_number: string | null; next_due_at: string | null; customer_name: string; customer_id: string }
 interface RecentRow { id: string; certificate_number: string | null; performed_at: string; status: string; as_left_result: string | null; description: string; customer_name: string; technician_name: string | null }
 
 export function Dashboard() {
   const { me } = useMe()
   const today = todayISO()
   const soon = addDays(today, DUE_SOON_DAYS)
-  const { data: stats } = useQuery<{ customers: number; equipment: number; overdue: number; due_soon: number; drafts: number }>(
+  const { data: stats } = useRows<{ customers: number; equipment: number; overdue: number; due_soon: number; drafts: number }>(
     `SELECT
        (SELECT count(*) FROM customers) AS customers,
        (SELECT count(*) FROM equipment WHERE status = 'active') AS equipment,
@@ -22,14 +23,14 @@ export function Dashboard() {
        (SELECT count(*) FROM calibrations WHERE status = 'draft') AS drafts`,
     [today, today, soon]
   )
-  const { data: due } = useQuery<DueRow>(
+  const { data: due } = useRows<DueRowData>(
     `SELECT e.id, e.description, e.serial_number, e.next_due_at, c.name AS customer_name, c.id AS customer_id
      FROM equipment e JOIN customers c ON c.id = e.customer_id
      WHERE e.status = 'active' AND e.next_due_at IS NOT NULL AND substr(e.next_due_at,1,10) <= ?
      ORDER BY e.next_due_at LIMIT 12`,
     [soon]
   )
-  const { data: recent } = useQuery<RecentRow>(
+  const { data: recent } = useRows<RecentRow>(
     `SELECT k.id, k.certificate_number, k.performed_at, k.status, k.as_left_result, k.technician_name,
             e.description, c.name AS customer_name
      FROM calibrations k JOIN equipment e ON e.id = k.equipment_id JOIN customers c ON c.id = k.customer_id
@@ -67,15 +68,7 @@ export function Dashboard() {
           ) : (
             <table className="w-full">
               <tbody className="divide-y divide-slate-100">
-                {due.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className={td}>
-                      <Link to={`/equipment/${r.id}`} className="font-medium text-slate-800 hover:text-brand-700">{r.description}</Link>
-                      <div className="text-xs text-slate-500">{r.customer_name}{r.serial_number ? ` · S/N ${r.serial_number}` : ''}</div>
-                    </td>
-                    <td className={`${td} text-right`}><DueBadge date={r.next_due_at} /></td>
-                  </tr>
-                ))}
+                {due.map((r) => <DueRow key={r.id} r={r} />)}
               </tbody>
             </table>
           )}
@@ -89,16 +82,7 @@ export function Dashboard() {
             <table className="w-full">
               <thead className="bg-slate-50/60"><tr><th className={th}>Equipment</th><th className={th}>Date</th><th className={th}>Result</th></tr></thead>
               <tbody className="divide-y divide-slate-100">
-                {recent.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className={td}>
-                      <Link to={`/calibrations/${r.id}`} className="font-medium text-slate-800 hover:text-brand-700">{r.description}</Link>
-                      <div className="text-xs text-slate-500">{r.customer_name}</div>
-                    </td>
-                    <td className={`${td} text-slate-600`}>{fmtDate(r.performed_at)}</td>
-                    <td className={td}>{r.status === 'draft' ? <span className="text-xs text-slate-500">Draft</span> : <ResultBadge result={r.as_left_result} />}</td>
-                  </tr>
-                ))}
+                {recent.map((r) => <RecentRowView key={r.id} r={r} />)}
               </tbody>
             </table>
           )}
@@ -107,3 +91,30 @@ export function Dashboard() {
     </>
   )
 }
+
+/** Memoized: re-renders only when this row's data changes. */
+const DueRow = memo(function DueRow({ r }: { r: DueRowData }) {
+  return (
+    <tr className="hover:bg-slate-50">
+        <td className={td}>
+          <Link to={`/equipment/${r.id}`} className="font-medium text-slate-800 hover:text-brand-700">{r.description}</Link>
+          <div className="text-xs text-slate-500">{r.customer_name}{r.serial_number ? ` · S/N ${r.serial_number}` : ''}</div>
+        </td>
+        <td className={`${td} text-right`}><DueBadge date={r.next_due_at} /></td>
+      </tr>
+  )
+})
+
+/** Memoized: re-renders only when this row's data changes. */
+const RecentRowView = memo(function RecentRowView({ r }: { r: RecentRow }) {
+  return (
+    <tr className="hover:bg-slate-50">
+        <td className={td}>
+          <Link to={`/calibrations/${r.id}`} className="font-medium text-slate-800 hover:text-brand-700">{r.description}</Link>
+          <div className="text-xs text-slate-500">{r.customer_name}</div>
+        </td>
+        <td className={`${td} text-slate-600`}>{fmtDate(r.performed_at)}</td>
+        <td className={td}>{r.status === 'draft' ? <span className="text-xs text-slate-500">Draft</span> : <ResultBadge result={r.as_left_result} />}</td>
+      </tr>
+  )
+})

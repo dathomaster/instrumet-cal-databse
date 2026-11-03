@@ -40,13 +40,13 @@ export function percentOfTolerance(value: string | null, p: PointLike): number |
   return (Math.abs(err) / band) * 100
 }
 
-export function overallAsFound(points: PointLike[]): 'pass' | 'fail' | null {
+export function overallAsFound(points: readonly PointLike[]): 'pass' | 'fail' | null {
   const r = points.map((p) => judge(p.as_found, p)).filter(Boolean)
   if (!r.length) return null
   return r.includes('fail') ? 'fail' : 'pass'
 }
 
-export function overallAsLeft(points: PointLike[]): 'pass' | 'fail' | 'adjusted' | null {
+export function overallAsLeft(points: readonly PointLike[]): 'pass' | 'fail' | 'adjusted' | null {
   // A point with no as-left reading was left as found.
   const r = points.map((p) => judge(p.as_left ?? p.as_found, p)).filter(Boolean)
   if (!r.length) return null

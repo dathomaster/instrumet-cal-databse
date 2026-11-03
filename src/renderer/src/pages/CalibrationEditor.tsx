@@ -1,5 +1,6 @@
+import { memo } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { CheckCircle2, FileText, Plus, RotateCcw, Trash2, AlertTriangle } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, EmptyState, Field, PageHeader, cx } from '@/components/ui'
 import { BackLink } from '@/components/BackLink'
@@ -19,21 +20,21 @@ type Pt = CalibrationPoint & { id: string }
 export function CalibrationEditor() {
   const { id = '' } = useParams()
   const nav = useNavigate()
-  const { data: cals, isLoading } = useQuery<Cal>('SELECT * FROM calibrations WHERE id = ?', [id])
+  const { data: cals, isLoading } = useRows<Cal>('SELECT * FROM calibrations WHERE id = ?', [id])
   const cal = cals[0]
-  const { data: eqs } = useQuery<Equipment & { id: string; customer_name: string }>(
+  const { data: eqs } = useRows<Equipment & { id: string; customer_name: string }>(
     'SELECT e.*, c.name AS customer_name FROM equipment e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?',
     [cal?.equipment_id ?? '']
   )
-  const { data: points } = useQuery<Pt>('SELECT * FROM calibration_points WHERE calibration_id = ? ORDER BY seq, created_at', [id])
-  const { data: standards } = useQuery<ReferenceStandard & { id: string }>('SELECT * FROM reference_standards ORDER BY name COLLATE NOCASE')
+  const { data: points } = useRows<Pt>('SELECT * FROM calibration_points WHERE calibration_id = ? ORDER BY seq, created_at', [id])
+  const { data: standards } = useRows<ReferenceStandard & { id: string }>('SELECT * FROM reference_standards ORDER BY name COLLATE NOCASE')
   const eq = eqs[0]
 
   if (!cal) return isLoading ? null : <EmptyState title="Calibration not found">It may have been deleted by another technician.</EmptyState>
   const locked = cal.status === 'completed'
   const used: string[] = (() => { try { return JSON.parse(cal.standards_used || '[]') } catch { return [] } })()
-  const foundResult = overallAsFound(points as PointLike[])
-  const leftResult = overallAsLeft(points as PointLike[])
+  const foundResult = overallAsFound(points as readonly PointLike[])
+  const leftResult = overallAsLeft(points as readonly PointLike[])
   const expiredUsed = standards.filter((s) => used.includes(s.id) && dueState(s.due_at) === 'overdue')
 
   async function toggleStandard(sid: string) {
@@ -51,7 +52,6 @@ export function CalibrationEditor() {
     )
   }
 
-  const P = { table: 'calibration_points' } as const
   const C = { table: 'calibrations', rowId: id } as const
 
   return (
@@ -156,38 +156,7 @@ export function CalibrationEditor() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {points.map((p, i) => {
-                const l = limits(p as PointLike)
-                const f = judge(p.as_found, p as PointLike)
-                const a = judge(p.as_left, p as PointLike)
-                const pf = percentOfTolerance(p.as_found, p as PointLike)
-                const pa = percentOfTolerance(p.as_left, p as PointLike)
-                const cell = (field: keyof Pt, extra: Record<string, unknown> = {}) => (
-                  <AutoInput {...P} rowId={p.id} field={field as string} value={p[field] as string} disabled={locked} {...extra} />
-                )
-                return (
-                  <tr key={p.id} className="group">
-                    <td className="px-3 py-1 text-xs text-slate-400">{i + 1}</td>
-                    <td className="px-1 py-1">{cell('parameter', { placeholder: 'e.g. Pressure' })}</td>
-                    <td className="px-1 py-1">{cell('units')}</td>
-                    <td className="px-1 py-1">{cell('nominal', { type: 'number', step: 'any' })}</td>
-                    <td className="px-1 py-1">{cell('tolerance_minus', { type: 'number', step: 'any', min: 0 })}</td>
-                    <td className="px-1 py-1">{cell('tolerance_plus', { type: 'number', step: 'any', min: 0, placeholder: '= tol −' })}</td>
-                    <td className="px-1 py-1 font-mono text-xs text-slate-500">{l ? `${+l.low.toPrecision(8)} … ${+l.high.toPrecision(8)}` : '—'}</td>
-                    <td className="px-1 py-1">{cell('as_found', { type: 'number', step: 'any', className: f === 'fail' ? 'text-red-700 font-medium' : undefined })}</td>
-                    <td className="px-1 py-1" title={pf !== null ? `${pf.toFixed(1)}% of tolerance` : undefined}><ResultBadge result={f} /></td>
-                    <td className="px-1 py-1">{cell('as_left', { type: 'number', step: 'any', placeholder: 'same', className: a === 'fail' ? 'text-red-700 font-medium' : undefined })}</td>
-                    <td className="px-1 py-1" title={pa !== null ? `${pa.toFixed(1)}% of tolerance` : undefined}>{p.as_left ? <ResultBadge result={a} /> : null}</td>
-                    <td className="px-1 py-1 text-right">
-                      {!locked && (
-                        <button onClick={() => deleteRow('calibration_points', p.id)} className="rounded p-1.5 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" aria-label="Delete point">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
+              {points.map((p, i) => <PointRow key={p.id} p={p} index={i} locked={locked} />)}
             </tbody>
           </table>
         </div>
@@ -201,3 +170,42 @@ export function CalibrationEditor() {
     </>
   )
 }
+
+const P = { table: 'calibration_points' } as const
+
+/**
+ * One measurement point. Memoized: while a technician types in one row (or a
+ * sync updates another), the other rows don't re-render.
+ */
+const PointRow = memo(function PointRow({ p, index: i, locked }: { p: Pt; index: number; locked: boolean }) {
+  const l = limits(p as PointLike)
+  const f = judge(p.as_found, p as PointLike)
+  const a = judge(p.as_left, p as PointLike)
+  const pf = percentOfTolerance(p.as_found, p as PointLike)
+  const pa = percentOfTolerance(p.as_left, p as PointLike)
+  const cell = (field: keyof Pt, extra: Record<string, unknown> = {}) => (
+    <AutoInput {...P} rowId={p.id} field={field as string} value={p[field] as string} disabled={locked} {...extra} />
+  )
+  return (
+    <tr className="group">
+      <td className="px-3 py-1 text-xs text-slate-400">{i + 1}</td>
+      <td className="px-1 py-1">{cell('parameter', { placeholder: 'e.g. Pressure' })}</td>
+      <td className="px-1 py-1">{cell('units')}</td>
+      <td className="px-1 py-1">{cell('nominal', { type: 'number', step: 'any' })}</td>
+      <td className="px-1 py-1">{cell('tolerance_minus', { type: 'number', step: 'any', min: 0 })}</td>
+      <td className="px-1 py-1">{cell('tolerance_plus', { type: 'number', step: 'any', min: 0, placeholder: '= tol −' })}</td>
+      <td className="px-1 py-1 font-mono text-xs text-slate-500">{l ? `${+l.low.toPrecision(8)} … ${+l.high.toPrecision(8)}` : '—'}</td>
+      <td className="px-1 py-1">{cell('as_found', { type: 'number', step: 'any', className: f === 'fail' ? 'text-red-700 font-medium' : undefined })}</td>
+      <td className="px-1 py-1" title={pf !== null ? `${pf.toFixed(1)}% of tolerance` : undefined}><ResultBadge result={f} /></td>
+      <td className="px-1 py-1">{cell('as_left', { type: 'number', step: 'any', placeholder: 'same', className: a === 'fail' ? 'text-red-700 font-medium' : undefined })}</td>
+      <td className="px-1 py-1" title={pa !== null ? `${pa.toFixed(1)}% of tolerance` : undefined}>{p.as_left ? <ResultBadge result={a} /> : null}</td>
+      <td className="px-1 py-1 text-right">
+        {!locked && (
+          <button onClick={() => deleteRow('calibration_points', p.id)} className="rounded p-1.5 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" aria-label="Delete point">
+            <Trash2 size={14} />
+          </button>
+        )}
+      </td>
+    </tr>
+  )
+})

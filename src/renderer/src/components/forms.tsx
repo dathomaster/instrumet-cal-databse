@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { Button, Field, Input, Modal, Select, Textarea } from './ui'
 import { insertRow, pick, updateRow } from '@/lib/data'
 import { useMe } from '@/lib/hooks'
@@ -105,7 +105,7 @@ const EQUIPMENT_KEYS = ['customer_id', 'description', 'asset_tag', 'equipment_ty
 export function EquipmentForm({ open, onClose, equipment, customerId, onCreated }: { open: boolean; onClose: () => void; equipment?: (Equipment & { id: string }) | null; customerId?: string; onCreated?: (id: string) => void }) {
   const { me } = useMe()
   const { user } = useAuth()
-  const { data: customers } = useQuery<{ id: string; name: string }>('SELECT id, name FROM customers ORDER BY name')
+  const { data: customers } = useRows<{ id: string; name: string }>('SELECT id, name FROM customers ORDER BY name')
   const initial = equipment
     ? { ...equipment, last_calibrated_at: dateOnly(equipment.last_calibrated_at), next_due_at: dateOnly(equipment.next_due_at) }
     : { customer_id: customerId ?? '', calibration_interval_days: 365, status: 'active' }

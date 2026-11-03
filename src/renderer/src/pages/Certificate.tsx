@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { ChevronLeft, Download, Printer } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { fmtDate, joinNonEmpty } from '@/lib/format'
@@ -13,13 +13,13 @@ const label = (r: string | null) => (r ? r.charAt(0).toUpperCase() + r.slice(1) 
 export function Certificate() {
   const { id = '' } = useParams()
   const nav = useNavigate()
-  const { data: cals } = useQuery<Calibration & { id: string }>('SELECT * FROM calibrations WHERE id = ?', [id])
+  const { data: cals } = useRows<Calibration & { id: string }>('SELECT * FROM calibrations WHERE id = ?', [id])
   const cal = cals[0]
-  const { data: eqs } = useQuery<Equipment>('SELECT * FROM equipment WHERE id = ?', [cal?.equipment_id ?? ''])
-  const { data: custs } = useQuery<Customer>('SELECT * FROM customers WHERE id = ?', [cal?.customer_id ?? ''])
-  const { data: orgs } = useQuery<{ name: string }>('SELECT name FROM organizations WHERE id = ?', [cal?.org_id ?? ''])
-  const { data: points } = useQuery<CalibrationPoint & { id: string }>('SELECT * FROM calibration_points WHERE calibration_id = ? ORDER BY seq, created_at', [id])
-  const { data: allStd } = useQuery<ReferenceStandard & { id: string }>('SELECT * FROM reference_standards')
+  const { data: eqs } = useRows<Equipment>('SELECT * FROM equipment WHERE id = ?', [cal?.equipment_id ?? ''])
+  const { data: custs } = useRows<Customer>('SELECT * FROM customers WHERE id = ?', [cal?.customer_id ?? ''])
+  const { data: orgs } = useRows<{ name: string }>('SELECT name FROM organizations WHERE id = ?', [cal?.org_id ?? ''])
+  const { data: points } = useRows<CalibrationPoint & { id: string }>('SELECT * FROM calibration_points WHERE calibration_id = ? ORDER BY seq, created_at', [id])
+  const { data: allStd } = useRows<ReferenceStandard & { id: string }>('SELECT * FROM reference_standards')
   if (!cal) return null
   const eq = eqs[0]
   const cust = custs[0]

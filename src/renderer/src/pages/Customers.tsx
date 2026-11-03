@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { Plus, Users } from 'lucide-react'
 import { Badge, Button, Card, EmptyState, PageHeader, SearchInput, td, th } from '@/components/ui'
 import { CustomerForm } from '@/components/forms'
@@ -14,7 +14,7 @@ export function Customers() {
   const nav = useNavigate()
   const like = `%${q.trim()}%`
   const today = todayISO()
-  const { data, isLoading } = useQuery<Row>(
+  const { data, isLoading } = useRows<Row>(
     `SELECT c.id, c.name, c.contact_name, c.phone, c.email, c.city, c.state,
        (SELECT count(*) FROM equipment e WHERE e.customer_id = c.id AND e.status = 'active') AS equipment_count,
        (SELECT count(*) FROM equipment e WHERE e.customer_id = c.id AND e.status = 'active' AND substr(e.next_due_at,1,10) BETWEEN ? AND ?) AS due_count,
@@ -42,18 +42,7 @@ export function Customers() {
           <table className="w-full">
             <thead className="bg-slate-50/60"><tr><th className={th}>Name</th><th className={th}>Contact</th><th className={th}>Location</th><th className={th}>Equipment</th><th className={th}></th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {data.map((c) => (
-                <tr key={c.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/customers/${c.id}`)}>
-                  <td className={td}><Link to={`/customers/${c.id}`} className="font-medium text-slate-800">{c.name}</Link></td>
-                  <td className={`${td} text-slate-600`}>{c.contact_name || '—'}<div className="text-xs text-slate-400">{joinNonEmpty([c.phone, c.email], ' · ')}</div></td>
-                  <td className={`${td} text-slate-600`}>{joinNonEmpty([c.city, c.state]) || '—'}</td>
-                  <td className={`${td} text-slate-600`}>{c.equipment_count}</td>
-                  <td className={`${td} space-x-1 text-right`}>
-                    {c.overdue_count > 0 && <Badge tone="red">{c.overdue_count} overdue</Badge>}
-                    {c.due_count > 0 && <Badge tone="amber">{c.due_count} due soon</Badge>}
-                  </td>
-                </tr>
-              ))}
+              {data.map((c) => <CustomerRow key={c.id} c={c} />)}
             </tbody>
           </table>
         )}
@@ -62,3 +51,20 @@ export function Customers() {
     </>
   )
 }
+
+/** Memoized: re-renders only when this customer's row data changes. */
+const CustomerRow = memo(function CustomerRow({ c }: { c: Row }) {
+  const nav = useNavigate()
+  return (
+    <tr className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/customers/${c.id}`)}>
+      <td className={td}><Link to={`/customers/${c.id}`} className="font-medium text-slate-800">{c.name}</Link></td>
+      <td className={`${td} text-slate-600`}>{c.contact_name || '—'}<div className="text-xs text-slate-400">{joinNonEmpty([c.phone, c.email], ' · ')}</div></td>
+      <td className={`${td} text-slate-600`}>{joinNonEmpty([c.city, c.state]) || '—'}</td>
+      <td className={`${td} text-slate-600`}>{c.equipment_count}</td>
+      <td className={`${td} space-x-1 text-right`}>
+        {c.overdue_count > 0 && <Badge tone="red">{c.overdue_count} overdue</Badge>}
+        {c.due_count > 0 && <Badge tone="amber">{c.due_count} due soon</Badge>}
+      </td>
+    </tr>
+  )
+})

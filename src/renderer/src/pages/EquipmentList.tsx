@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@powersync/react'
+import { useRows } from '@/lib/useRows'
 import { Plus, Wrench } from 'lucide-react'
 import { Button, Card, EmptyState, PageHeader, SearchInput, Select, td, th, cx } from '@/components/ui'
 import { DueBadge } from '@/components/DueBadge'
@@ -32,7 +32,7 @@ export function EquipmentList() {
     : due === 'none' ? 'AND e.next_due_at IS NULL'
     : ''
 
-  const { data, isLoading } = useQuery<Row>(
+  const { data, isLoading } = useRows<Row>(
     `SELECT e.id, e.description, e.asset_tag, e.manufacturer, e.model, e.serial_number, e.next_due_at, e.status, e.equipment_type,
             c.name AS customer_name, c.id AS customer_id
      FROM equipment e JOIN customers c ON c.id = e.customer_id
@@ -42,7 +42,7 @@ export function EquipmentList() {
      ORDER BY e.next_due_at IS NULL, e.next_due_at, e.description COLLATE NOCASE`,
     [like, like, like, like, like, like, type, type]
   )
-  const { data: types } = useQuery<{ t: string }>("SELECT DISTINCT equipment_type AS t FROM equipment WHERE equipment_type IS NOT NULL AND equipment_type != '' ORDER BY 1")
+  const { data: types } = useRows<{ t: string }>("SELECT DISTINCT equipment_type AS t FROM equipment WHERE equipment_type IS NOT NULL AND equipment_type != '' ORDER BY 1")
 
   return (
     <>
@@ -72,18 +72,7 @@ export function EquipmentList() {
           <table className="w-full">
             <thead className="bg-slate-50/60"><tr><th className={th}>Description</th><th className={th}>Customer</th><th className={th}>Make / model</th><th className={th}>Serial</th><th className={th}>Status</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {data.map((e) => (
-                <tr key={e.id} className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/equipment/${e.id}`)}>
-                  <td className={td}>
-                    <Link to={`/equipment/${e.id}`} className="font-medium text-slate-800">{e.description}</Link>
-                    <div className="text-xs text-slate-500">{joinNonEmpty([e.equipment_type, e.asset_tag && `Tag ${e.asset_tag}`], ' · ')}</div>
-                  </td>
-                  <td className={`${td} text-slate-600`}>{e.customer_name}</td>
-                  <td className={`${td} text-slate-600`}>{joinNonEmpty([e.manufacturer, e.model], ' ') || '—'}</td>
-                  <td className={`${td} font-mono text-xs text-slate-600`}>{e.serial_number || '—'}</td>
-                  <td className={td}>{e.status === 'active' ? <DueBadge date={e.next_due_at} /> : <span className="text-xs capitalize text-slate-500">{e.status.replace(/_/g, ' ')}</span>}</td>
-                </tr>
-              ))}
+              {data.map((e) => <EquipmentRow key={e.id} e={e} />)}
             </tbody>
           </table>
         )}
@@ -92,3 +81,20 @@ export function EquipmentList() {
     </>
   )
 }
+
+/** Memoized: re-renders only when this row's data changes. */
+const EquipmentRow = memo(function EquipmentRow({ e }: { e: Row }) {
+  const nav = useNavigate()
+  return (
+    <tr className="cursor-pointer hover:bg-slate-50" onClick={() => nav(`/equipment/${e.id}`)}>
+      <td className={td}>
+        <Link to={`/equipment/${e.id}`} className="font-medium text-slate-800">{e.description}</Link>
+        <div className="text-xs text-slate-500">{joinNonEmpty([e.equipment_type, e.asset_tag && `Tag ${e.asset_tag}`], ' · ')}</div>
+      </td>
+      <td className={`${td} text-slate-600`}>{e.customer_name}</td>
+      <td className={`${td} text-slate-600`}>{joinNonEmpty([e.manufacturer, e.model], ' ') || '—'}</td>
+      <td className={`${td} font-mono text-xs text-slate-600`}>{e.serial_number || '—'}</td>
+      <td className={td}>{e.status === 'active' ? <DueBadge date={e.next_due_at} /> : <span className="text-xs capitalize text-slate-500">{e.status.replace(/_/g, ' ')}</span>}</td>
+    </tr>
+  )
+})

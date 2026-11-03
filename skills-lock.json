@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "powersync": {
+      "source": "powersync-ja/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/powersync/SKILL.md",
+      "computedHash": "ff38d68f64014eec7c37fab4626545f81501682f5d66bc5ea887b073bbdf32ee"
+    }
+  }
+}

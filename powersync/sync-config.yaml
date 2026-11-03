@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_config.json
+# See https://docs.powersync.com/sync/streams/overview
+config:
+  edition: 3
+
+# Organizations the signed-in technician belongs to (from the Supabase JWT `sub`)
+with:
+  user_orgs: SELECT org_id FROM org_members WHERE user_id = auth.user_id()
+
+streams:
+  # Everything a technician needs to work fully offline. Uses one stream with
+  # multiple queries to keep bucket count low.
+  org_data:
+    auto_subscribe: true
+    queries:
+      - SELECT * FROM organizations WHERE id IN user_orgs
+      - SELECT * FROM org_members WHERE org_id IN user_orgs
+      - SELECT * FROM customers WHERE org_id IN user_orgs
+      - SELECT * FROM equipment WHERE org_id IN user_orgs
+      - SELECT * FROM reference_standards WHERE org_id IN user_orgs
+      - SELECT * FROM calibrations WHERE org_id IN user_orgs
+      - SELECT * FROM calibration_points WHERE org_id IN user_orgs

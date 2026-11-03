@@ -1,0 +1,30 @@
+# Adds YAML Schema support for VSCode users with the YAML extension installed. This enables features like validation and autocompletion based on the provided schema.
+# yaml-language-server: $schema=https://unpkg.com/@powersync/cli-schemas@latest/json-schema/service-config.json
+
+# PowerSync Cloud config – source-of-truth template with all schema options as valid YAML.
+# Docs: https://docs.powersync.com/sync/overview
+
+# [required] Service type identifier.
+_type: cloud
+
+# [required] Instance name for display in the PowerSync Cloud dashboard.
+name: calibration-app
+
+# [required] Deployment region, e.g. us. Cannot be changed after initial deployment.
+region: us
+
+replication:
+  connections:
+    - type: postgresql
+      # Supabase direct connection, as the dedicated powersync_role (never `postgres`)
+      hostname: !env PS_DATABASE_HOST
+      port: 5432
+      database: postgres
+      username: !env PS_DATABASE_USER
+      password:
+        secret: !env PS_DATABASE_PASSWORD   # stored as a Cloud secret on first deploy
+      sslmode: verify-full
+
+# Verify Supabase Auth JWTs (new asymmetric signing keys are auto-detected)
+client_auth:
+  supabase: true

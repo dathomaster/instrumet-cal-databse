@@ -6,9 +6,7 @@ import { fmtDate, joinNonEmpty } from '@/lib/format'
 import { judge, limits, type PointLike } from '@/lib/calibration'
 import type { Calibration, CalibrationPoint, Customer, Equipment, ReferenceStandard } from '@/powersync/AppSchema'
 
-declare global {
-  interface Window { desktop?: { isElectron: boolean; printToPDF: (name: string) => Promise<{ ok: boolean; filePath?: string }> } }
-}
+import '@/lib/desktop'
 
 const label = (r: string | null) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : '—')
 

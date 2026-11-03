@@ -7,10 +7,19 @@ files:
   - out/**
   - package.json
 asar: true
+# Installed apps check GitHub Releases for updates (repo is public, so no token
+# is built into the app). Releases are published by .github/workflows/release.yml.
+publish:
+  provider: github
+  owner: dathomaster
+  repo: instrumet-cal-databse
+  releaseType: release
 win:
   target: nsis
+  artifactName: Instrumet-Calibration-Setup-${version}.${ext}
 nsis:
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
 mac:
   target: dmg

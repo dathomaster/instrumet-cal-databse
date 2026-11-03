@@ -1,9 +1,12 @@
 import { useState } from 'react'
+import { config } from '@/lib/config'
 import { useQuery, useStatus } from '@powersync/react'
 import { AlertTriangle, Check, LogOut, X } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, Field, Modal, PageHeader, Select, td, th } from '@/components/ui'
 import { AutoInput } from '@/components/AutoInput'
 import { SyncIndicator } from '@/components/SyncIndicator'
+import { RemoveMemberButton, ResetPasswordButton } from '@/components/MemberActions'
+import { ChangePasswordButton } from '@/components/ChangePassword'
 import { useAuth } from '@/lib/auth'
 import { useMe, usePendingUploads } from '@/lib/hooks'
 import { deleteRow, updateRow } from '@/lib/data'
@@ -33,6 +36,7 @@ export function Settings() {
             {me && <Field label="Name (appears on certificates)"><AutoInput table="org_members" rowId={me.id} field="full_name" value={me.full_name} boxed /></Field>}
             <Field label="Email"><div className="px-1 text-sm text-slate-700">{user?.email}</div></Field>
             <Field label="Role"><div className="px-1 text-sm capitalize text-slate-700">{me?.role}</div></Field>
+            <ChangePasswordButton />
           </div>
         </Card>
 
@@ -51,6 +55,7 @@ export function Settings() {
               <dt>Server connection</dt><dd>{status.connected ? 'Connected' : status.connecting ? 'Connecting…' : 'Offline'}</dd>
               <dt>Last synced</dt><dd>{status.lastSyncedAt ? status.lastSyncedAt.toLocaleString() : 'Never'}</dd>
               <dt>Changes waiting to upload</dt><dd data-testid="pending-count">{pending}</dd>
+              <dt>App version</dt><dd>{config.appVersion}</dd>
             </dl>
             <p className="text-xs text-slate-500">Everything you enter is saved on this computer first. Changes upload automatically whenever you are online, and edits by other technicians appear here within seconds.</p>
           </div>
@@ -89,7 +94,7 @@ export function Settings() {
             subtitle={isAdmin ? 'Technicians create an account in the app, then you approve them here' : undefined}
           />
           <table className="w-full">
-            <thead className="bg-slate-50/60"><tr><th className={th}>Name</th><th className={th}>Email</th><th className={th}>Role</th></tr></thead>
+            <thead className="bg-slate-50/60"><tr><th className={th}>Name</th><th className={th}>Email</th><th className={th}>Role</th>{isAdmin && <th className={th} />}</tr></thead>
             <tbody className="divide-y divide-slate-100">
               {members.map((m) => (
                 <tr key={m.id}>
@@ -110,6 +115,16 @@ export function Settings() {
                       </Select>
                     ) : <span className="text-sm capitalize text-slate-600">{m.role}</span>}
                   </td>
+                  {isAdmin && (
+                    <td className={`${td} text-right`}>
+                      {m.user_id !== user?.id && m.role !== 'pending' && (
+                        <div className="flex justify-end gap-1">
+                          <ResetPasswordButton member={m} />
+                          <RemoveMemberButton member={m} />
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

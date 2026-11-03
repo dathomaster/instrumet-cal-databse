@@ -15,6 +15,7 @@ export function Login() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ tone: 'error' | 'info'; text: string } | null>(null)
   const [unsynced, setUnsynced] = useState(0)
+  const [forgot, setForgot] = useState(false)
 
   useEffect(() => {
     if (deviceUser) db.getUploadQueueStats().then((s) => setUnsynced(s.count)).catch(() => undefined)
@@ -88,6 +89,15 @@ export function Login() {
             {busy && <Loader2 size={16} className="animate-spin" />}
             {mode === 'in' ? 'Sign in' : 'Create account'}
           </Button>
+          {mode === 'in' && (
+            forgot ? (
+              <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                Ask your admin to reset it: <strong>Settings → Team → Reset password</strong>. They’ll give you a temporary password you can change after signing in.
+              </p>
+            ) : (
+              <button type="button" className="block w-full text-center text-xs text-slate-500 hover:text-slate-800" onClick={() => setForgot(true)}>Forgot password?</button>
+            )
+          )}
         </form>
         <p className="mt-4 text-center text-sm text-slate-500">
           {mode === 'in' ? 'New technician?' : 'Already have an account?'}{' '}

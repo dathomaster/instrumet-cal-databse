@@ -1,7 +1,7 @@
 {
   "name": "calibration-app",
   "productName": "Instrumet Calibration",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Offline-first calibration records for field technicians",
   "private": true,
   "main": "./out/main/index.js",
@@ -20,6 +20,7 @@
     "@powersync/react": "^2.2.0",
     "@powersync/web": "^2.6.0",
     "@supabase/supabase-js": "^2.118.0",
+    "electron-updater": "^6.8.11",
     "lucide-react": "^1.66.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

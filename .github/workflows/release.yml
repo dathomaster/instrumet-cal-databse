@@ -1,0 +1,38 @@
+# Build the Windows installer and publish it as a GitHub Release.
+# Installed apps auto-update from the latest release.
+#
+# To release:  bump "version" in package.json, commit, then
+#   git tag v0.2.0 && git push origin v0.2.0
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      # Public client values only (they ship inside every installed app anyway).
+      SUPABASE_URL: https://dnqdkpvnuaophefjlftb.supabase.co
+      SUPABASE_ANON_KEY: sb_publishable_Dl4ZCggDbx5eqd5fuw3D4g_Vp9_7_3W
+      POWERSYNC_URL: https://6ae964554d7433c80998d2e2.powersync.journeyapps.com
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check tag matches package.json version
+        shell: bash
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} != package.json v$v"; exit 1; }
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npx electron-vite build
+      - run: npx electron-builder --win --publish always

@@ -66,8 +66,39 @@ never bundled.
 * Only a *different* person signing in on a computer replaces the local data, and
   the sign-in screen warns first if that would lose unsynced changes. To hand a
   computer to someone else, reset Windows (laptops use BitLocker for data at rest).
+* **Forgot password:** an admin opens **Settings → Team → Reset password**, gets a
+  temporary password to give the technician, and the technician changes it under
+  **Settings → Your profile → Change password**. No email links involved.
+* **Someone leaves:** **Settings → Team → Remove**. They lose access immediately and
+  the company data is removed from their laptop the next time it connects. Their past
+  calibrations are kept. A company can never remove or demote its last admin.
 * Changes are never dropped because of a sign-in problem: uploads wait for a valid
   session and only genuinely invalid changes go to *Settings → Changes the server rejected*.
+
+## Installing on laptops & updates
+
+Install with the **Instrumet-Calibration-Setup-x.y.z.exe** from the repo's
+[Releases page](https://github.com/dathomaster/instrumet-cal-databse/releases).
+The installer isn't code-signed yet, so the first time Windows SmartScreen says
+"unknown publisher": click **More info → Run anyway**.
+
+Installed apps **update themselves**. They check for a new release at launch and
+every 4 hours, download it in the background, and show "Restart to update". If
+nobody clicks it, the update installs the next time the app is closed. Local data and
+unsynced changes are kept across updates.
+
+**Publishing an update** (GitHub builds the installer; nothing to build locally):
+
+```bash
+npm version 0.3.0 --no-git-tag-version   # bump the version
+git commit -am "Release 0.3.0"
+git tag v0.3.0
+git push origin main v0.3.0
+```
+
+The tag triggers `.github/workflows/release.yml`, which builds the Windows installer
+and publishes the release (about 5 to 10 minutes). Updates are served from this
+repo's public Releases; if the repo is made private, the update host must change.
 
 ## Project layout
 
@@ -81,6 +112,8 @@ never bundled.
 | `src/renderer/src/pages/` | Screens |
 | `tests/e2e-sync.cjs` | Two-laptop end-to-end sync test (online, offline, reconnect, live edits) |
 | `tests/e2e-auth.cjs` | Approval flow, offline sign-out/sign-in, restart offline, auto-resume |
+| `tests/e2e-admin.cjs` | Admin password reset, change password, remove a technician |
+| `.github/workflows/release.yml` | Builds + publishes the Windows installer when a `v*` tag is pushed |
 
 ## Changing the schema
 

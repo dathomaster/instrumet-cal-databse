@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { defineConfig, loadEnv } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -19,7 +20,8 @@ export default defineConfig(({ mode }) => {
       define: {
         __SUPABASE_URL__: JSON.stringify(env.SUPABASE_URL),
         __SUPABASE_ANON_KEY__: JSON.stringify(env.SUPABASE_ANON_KEY),
-        __POWERSYNC_URL__: JSON.stringify(env.POWERSYNC_URL)
+        __POWERSYNC_URL__: JSON.stringify(env.POWERSYNC_URL),
+        __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync('package.json', 'utf8')).version)
       },
       plugins: [react(), tailwindcss(), wasm()],
       optimizeDeps: { exclude: ['@journeyapps/wa-sqlite', '@powersync/web'] },

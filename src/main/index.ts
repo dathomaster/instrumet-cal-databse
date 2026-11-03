@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } fr
 import { join, normalize, extname } from 'node:path'
 import { writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
+import { autoUpdater } from 'electron-updater'
 
 // The renderer is served from app://bundle/ in production. PowerSync's web
 // SDK needs a secure, standard origin for IndexedDB/OPFS, SharedWorker and
@@ -85,7 +86,25 @@ ipcMain.handle('print-to-pdf', async (event, suggestedName: string) => {
   return { ok: true, filePath }
 })
 
+// ---- Auto-update from GitHub Releases (installed app only) ----------------
+// Downloads quietly in the background; the renderer shows "Restart to update".
+// If nobody clicks it, the update installs the next time the app is closed.
+function setupAutoUpdates(): void {
+  if (!app.isPackaged) return
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.on('update-downloaded', (info) => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('update-ready', info.version)
+  })
+  autoUpdater.on('error', (e) => console.warn('Update check failed (offline?)', e?.message))
+  const check = () => autoUpdater.checkForUpdates().catch(() => undefined)
+  check()
+  setInterval(check, 4 * 60 * 60 * 1000)
+}
+ipcMain.handle('install-update', () => autoUpdater.quitAndInstall())
+
 app.whenReady().then(() => {
+  setupAutoUpdates()
   registerAppProtocol()
   if (!isDev) {
     // Content Security Policy for the packaged app

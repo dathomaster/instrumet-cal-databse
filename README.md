@@ -65,7 +65,7 @@ never bundled.
   timeout are off), so technicians stay signed in through long offline stretches.
 * Only a *different* person signing in on a computer replaces the local data, and
   the sign-in screen warns first if that would lose unsynced changes. To hand a
-  computer over, use **Sign out → Erase data from this computer**.
+  computer to someone else, reset Windows (laptops use BitLocker for data at rest).
 * Changes are never dropped because of a sign-in problem: uploads wait for a valid
   session and only genuinely invalid changes go to *Settings → Changes the server rejected*.
 

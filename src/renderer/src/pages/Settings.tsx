@@ -16,7 +16,6 @@ export function Settings() {
   const status = useStatus()
   const pending = usePendingUploads()
   const [confirmOut, setConfirmOut] = useState(false)
-  const [erase, setErase] = useState(false)
   const isAdmin = me?.role === 'admin'
   const { data: members } = useQuery<OrgMember & { id: string }>(
     "SELECT * FROM org_members ORDER BY role = 'pending' DESC, full_name COLLATE NOCASE"
@@ -61,7 +60,7 @@ export function Settings() {
           <CardHeader title="Sign out" />
           <div className="space-y-3 p-5 text-sm text-slate-600">
             <p>Your data stays on this computer, so you can sign back in any time — even without internet.</p>
-            <Button variant="danger" onClick={() => { setErase(false); setConfirmOut(true) }}><LogOut size={15} />Sign out</Button>
+            <Button variant="danger" onClick={() => setConfirmOut(true)}><LogOut size={15} />Sign out</Button>
           </div>
         </Card>
 
@@ -122,21 +121,11 @@ export function Settings() {
         open={confirmOut}
         onClose={() => setConfirmOut(false)}
         title="Sign out?"
-        footer={<><Button variant="secondary" onClick={() => setConfirmOut(false)}>Cancel</Button><Button className={erase ? 'bg-red-600 hover:bg-red-700' : undefined} onClick={() => signOut({ erase })}>{erase ? 'Sign out & erase' : 'Sign out'}</Button></>}
+        footer={<><Button variant="secondary" onClick={() => setConfirmOut(false)}>Cancel</Button><Button onClick={() => signOut()}>Sign out</Button></>}
       >
-        <div className="space-y-3 text-sm text-slate-600">
-          <p>Your data{pending > 0 ? ` and ${pending} unsynced change${pending === 1 ? '' : 's'}` : ''} stay on this computer. Sign back in any time — even offline — and pick up where you left off.</p>
-          <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3">
-            <input type="checkbox" className="mt-0.5 accent-red-600" checked={erase} onChange={(e) => setErase(e.target.checked)} />
-            <span>
-              <span className="font-medium text-slate-800">Erase data from this computer</span>
-              <span className="block text-xs text-slate-500">Only if you’re handing this computer to someone else.</span>
-            </span>
-          </label>
-          {erase && pending > 0 && (
-            <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-amber-800"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{pending} change{pending === 1 ? ' has' : 's have'} not uploaded yet and will be lost. Connect to the internet and wait for sync to finish first.</p>
-          )}
-        </div>
+        <p className="text-sm text-slate-600">
+          Your data{pending > 0 ? ` and ${pending} unsynced change${pending === 1 ? '' : 's'}` : ''} stay on this computer. Sign back in any time — even offline — and pick up where you left off.
+        </p>
       </Modal>
     </>
   )

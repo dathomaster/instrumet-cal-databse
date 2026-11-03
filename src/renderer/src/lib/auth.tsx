@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { AuthError, isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { connectOnce, db, disconnect, disconnectAndClear } from '@/powersync/db'
-import { checkLocalLogin, forgetLocalLogin, rememberLocalLogin } from './localLogin'
+import { checkLocalLogin, rememberLocalLogin } from './localLogin'
 
 export interface AppUser {
   id: string
@@ -18,7 +18,8 @@ interface AuthState {
   needsSignIn: boolean
   signIn: (email: string, password: string) => Promise<string | null>
   signUp: (email: string, password: string, fullName: string) => Promise<string | null>
-  signOut: (opts?: { erase?: boolean }) => Promise<void>
+  /** Keeps all local data (and unsynced changes) on this computer. */
+  signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -156,17 +157,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null
   }, [])
 
-  const signOut = useCallback(async ({ erase = false }: { erase?: boolean } = {}) => {
+  const signOut = useCallback(async () => {
     write(ACTIVE, false)
     pendingPassword.current = null
-    if (erase) {
-      await disconnectAndClear()
-      write(DEVICE_USER, null)
-      forgetLocalLogin()
-      setDeviceUser(null)
-    } else {
-      await disconnect() // data + unsynced changes stay on this computer
-    }
+    await disconnect() // data + unsynced changes stay on this computer
     await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined)
     setUser(null)
     setNeedsSignIn(false)

@@ -42,11 +42,3 @@ export async function checkLocalLogin(email: string, password: string): Promise<
     return false
   }
 }
-
-export function hasLocalLogin(): boolean {
-  try { return !!localStorage.getItem(KEY) } catch { return false }
-}
-
-export function forgetLocalLogin(): void {
-  try { localStorage.removeItem(KEY) } catch { /* ignore */ }
-}

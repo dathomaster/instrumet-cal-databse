@@ -40,6 +40,12 @@ npm run dev              # development
 npm run dist:win         # Windows installer  (also dist:mac, dist:linux)
 ```
 
+**Windows (PowerShell 5.1):** create `.env` with ASCII encoding or the first key is
+not read, e.g. `@"…"@ | Set-Content -Path .env -Encoding ascii`.
+
+**`Error: Electron uninstall`** on `npm run dev` means Electron's binary download was
+skipped during install. Run `node node_modules/electron/install.js`, then retry.
+
 Only `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable key) and `POWERSYNC_URL`
 are built into the app. The admin tokens in `.env` are for the CLI only and are
 never bundled.

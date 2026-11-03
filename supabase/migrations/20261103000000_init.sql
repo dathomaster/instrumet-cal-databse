@@ -7,10 +7,14 @@
 -- PostgREST will not coerce into boolean on upload) — use text enums.
 -- =====================================================================
 
-create extension if not exists "pgcrypto";
+-- Private schema for privileged helpers. It is NOT exposed through the
+-- Data API, so SECURITY DEFINER functions here cannot be called via RPC.
+create schema if not exists private;
+revoke all on schema private from public, anon;
+grant usage on schema private to authenticated;
 
 -- ---------- helpers ---------------------------------------------------
-create or replace function public.set_updated_at()
+create or replace function private.set_updated_at()
 returns trigger language plpgsql as $$
 begin
   new.updated_at = now();
@@ -38,18 +42,21 @@ create table public.org_members (
 );
 create index on public.org_members(user_id);
 
--- SECURITY DEFINER so RLS policies can check membership without recursion
-create or replace function public.is_org_member(p_org uuid)
+-- SECURITY DEFINER so RLS policies on org_members can check membership
+-- without recursing into org_members' own RLS. Lives in `private`.
+create or replace function private.is_org_member(p_org uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.org_members m
                  where m.org_id = p_org and m.user_id = auth.uid());
 $$;
 
-create or replace function public.is_org_admin(p_org uuid)
+create or replace function private.is_org_admin(p_org uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.org_members m
                  where m.org_id = p_org and m.user_id = auth.uid() and m.role = 'admin');
 $$;
+revoke execute on function private.is_org_member(uuid), private.is_org_admin(uuid) from public, anon;
+grant execute on function private.is_org_member(uuid), private.is_org_admin(uuid) to authenticated;
 
 -- ---------- customers -------------------------------------------------
 create table public.customers (
@@ -172,21 +179,22 @@ begin
                            'reference_standards','calibrations','calibration_points']
   loop
     execute format('create trigger %I_updated_at before update on public.%I
-                    for each row execute function public.set_updated_at()', t, t);
+                    for each row execute function private.set_updated_at()', t, t);
     execute format('alter table public.%I replica identity full', t);
     execute format('alter table public.%I enable row level security', t);
   end loop;
 end $$;
 
 -- ---------- Row Level Security ----------------------------------------
-create policy "members read org"   on public.organizations for select using (public.is_org_member(id));
-create policy "admins update org"  on public.organizations for update using (public.is_org_admin(id));
+create policy "members read org"   on public.organizations for select to authenticated using (private.is_org_member(id));
+create policy "admins update org"  on public.organizations for update to authenticated
+  using (private.is_org_admin(id)) with check (private.is_org_admin(id));
 
-create policy "members read members" on public.org_members for select using (public.is_org_member(org_id));
-create policy "admins manage members" on public.org_members for all
-  using (public.is_org_admin(org_id)) with check (public.is_org_admin(org_id));
-create policy "members update own profile" on public.org_members for update
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "members read members" on public.org_members for select to authenticated using (private.is_org_member(org_id));
+create policy "admins manage members" on public.org_members for all to authenticated
+  using (private.is_org_admin(org_id)) with check (private.is_org_admin(org_id));
+create policy "members update own profile" on public.org_members for update to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 do $$
 declare t text;
@@ -194,23 +202,27 @@ begin
   foreach t in array array['customers','equipment','reference_standards',
                            'calibrations','calibration_points']
   loop
-    execute format('create policy "org members full access" on public.%I for all
-                    using (public.is_org_member(org_id))
-                    with check (public.is_org_member(org_id))', t);
+    execute format('create policy "org members full access" on public.%I for all to authenticated
+                    using (private.is_org_member(org_id))
+                    with check (private.is_org_member(org_id))', t);
   end loop;
 end $$;
 
 -- Prevent a technician from escalating their own role
-create or replace function public.guard_member_role()
+-- and from moving a membership to another org / user.
+create or replace function private.guard_member_update()
 returns trigger language plpgsql as $$
 begin
-  if new.role is distinct from old.role and not public.is_org_admin(old.org_id) then
+  if new.org_id is distinct from old.org_id or new.user_id is distinct from old.user_id then
+    raise exception 'org_id and user_id cannot be changed' using errcode = '42501';
+  end if;
+  if new.role is distinct from old.role and not private.is_org_admin(old.org_id) then
     raise exception 'only admins can change roles' using errcode = '42501';
   end if;
   return new;
 end $$;
 create trigger org_members_guard_role before update on public.org_members
-  for each row execute function public.guard_member_role();
+  for each row execute function private.guard_member_update();
 
 -- ---------- Data API grants (required for new Supabase projects) ------
 grant select, update on public.organizations to authenticated;
@@ -225,7 +237,7 @@ grant select, insert, update, delete on
 -- IMPORTANT: turn OFF public sign-ups in Supabase (Auth > Providers > Email
 -- "Allow new users to sign up") once your technicians are invited, so
 -- strangers cannot join your company.
-create or replace function public.handle_new_user()
+create or replace function private.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare v_org uuid; v_role text := 'technician';
 begin
@@ -235,13 +247,14 @@ begin
     v_role := 'admin';
   end if;
   insert into public.org_members(org_id, user_id, email, full_name, role)
-  values (v_org, new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.email), v_role)
+  values (v_org, new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', new.email), v_role)  -- metadata used for display name only, never authz
   on conflict do nothing;
   return new;
 end $$;
+revoke execute on function private.handle_new_user() from public, anon, authenticated;
 
 create trigger on_auth_user_created after insert on auth.users
-  for each row execute function public.handle_new_user();
+  for each row execute function private.handle_new_user();
 
 -- ---------- PowerSync replication -------------------------------------
 -- The powersync_role (with its password) is created separately — see

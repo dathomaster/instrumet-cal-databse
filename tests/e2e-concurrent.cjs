@@ -1,8 +1,12 @@
 // Concurrent-edit e2e: two technicians on the same calibration point. Focusing
 // and leaving a field without typing must not overwrite the other's newer edit;
 // a real edit wins (last write wins). Needs e2e-tech1/2 in a test organization
-// plus the seed rows (customer/equipment/calibration/point ids ending in e2) —
-// see the git history of this file. Run: npm run build && TMPROOT=$(mktemp -d) E2E_PASSWORD=... xvfb-run -a node tests/e2e-concurrent.cjs
+// plus these seed rows in that organization (ORG = the test org id):
+//   insert into customers(id, org_id, name) values ('c0000000-0000-0000-0000-0000000000e2', ORG, 'Concurrency Co');
+//   insert into equipment(id, org_id, customer_id, description) values ('e0000000-0000-0000-0000-0000000000e2', ORG, 'c0000000-0000-0000-0000-0000000000e2', 'Gauge');
+//   insert into calibrations(id, org_id, customer_id, equipment_id, certificate_number, status) values ('ca000000-0000-0000-0000-0000000000e2', ORG, 'c0000000-0000-0000-0000-0000000000e2', 'e0000000-0000-0000-0000-0000000000e2', 'CAL-E2E', 'draft');
+//   insert into calibration_points(id, org_id, calibration_id, seq, parameter, nominal, tolerance_minus, as_found) values ('b0000000-0000-0000-0000-0000000000e2', ORG, 'ca000000-0000-0000-0000-0000000000e2', 1, 'Pressure', '1', '0.5', '1.0');
+// Run: npm run build && TMPROOT=$(mktemp -d) E2E_PASSWORD=... xvfb-run -a node tests/e2e-concurrent.cjs
 const { _electron: electron } = require('playwright')
 const path = require('path')
 const APP = require('path').resolve(__dirname, '..')

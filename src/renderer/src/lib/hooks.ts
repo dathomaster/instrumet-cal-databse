@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { usePowerSync, useQuery, useStatus } from '@powersync/react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useQuery, useStatus } from '@powersync/react'
+import { db } from '@/powersync/db'
 import { useAuth } from './auth'
 import type { OrgMember } from '@/powersync/AppSchema'
 
@@ -20,22 +21,43 @@ export function useMe(): { me: Me | null; isLoading: boolean } {
   return { me: data[0] ?? null, isLoading }
 }
 
+// One shared poller for the upload-queue size so every badge shows the same number.
+let pendingCount = 0
+const pendingListeners = new Set<() => void>()
+let pendingTimer: ReturnType<typeof setInterval> | null = null
+async function refreshPending(): Promise<void> {
+  try {
+    const n = (await db.getUploadQueueStats()).count
+    if (n !== pendingCount) {
+      pendingCount = n
+      pendingListeners.forEach((l) => l())
+    }
+  } catch {
+    /* db closing */
+  }
+}
+function subscribePending(cb: () => void): () => void {
+  pendingListeners.add(cb)
+  if (!pendingTimer) {
+    refreshPending()
+    pendingTimer = setInterval(refreshPending, 1000)
+  }
+  return () => {
+    pendingListeners.delete(cb)
+    if (!pendingListeners.size && pendingTimer) {
+      clearInterval(pendingTimer)
+      pendingTimer = null
+    }
+  }
+}
+
 /** Number of local changes not yet uploaded to the server. */
 export function usePendingUploads(): number {
-  const db = usePowerSync()
   const status = useStatus()
-  const [count, setCount] = useState(0)
   useEffect(() => {
-    let alive = true
-    const tick = () => db.getUploadQueueStats().then((s) => alive && setCount(s.count)).catch(() => undefined)
-    tick()
-    const t = setInterval(tick, 1500)
-    return () => {
-      alive = false
-      clearInterval(t)
-    }
-  }, [db, status.dataFlowStatus.uploading])
-  return count
+    refreshPending()
+  }, [status.dataFlowStatus.uploading])
+  return useSyncExternalStore(subscribePending, () => pendingCount)
 }
 
 export function useOnline(): boolean {

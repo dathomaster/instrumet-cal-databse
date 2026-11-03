@@ -13,7 +13,12 @@ export function SyncIndicator({ compact }: { compact?: boolean }) {
   let label = 'All changes synced'
   let tone = 'text-emerald-700 bg-emerald-50'
 
-  if (!online || (!status.connected && !status.connecting)) {
+  // "Offline" = we can't reach the sync server, whatever the OS says
+  // (e.g. customer Wi-Fi with no internet still reports navigator.onLine).
+  const networkFailure = (e?: Error) => !!e && /fetch|network|socket|timed? ?out/i.test(e.message)
+  const unreachable =
+    (!status.connected && (!!downloadError || !status.connecting)) || networkFailure(uploadError) || networkFailure(downloadError)
+  if (!online || unreachable) {
     icon = <CloudOff size={15} />
     label = pending ? `Offline · ${pending} change${pending === 1 ? '' : 's'} saved locally` : 'Offline · working locally'
     tone = 'text-slate-600 bg-slate-100'
@@ -45,7 +50,13 @@ export function SyncIndicator({ compact }: { compact?: boolean }) {
     .join('\n')
 
   return (
-    <div data-testid="sync-indicator" title={title} className={cx('flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium', tone)}>
+    <div
+      data-testid="sync-indicator"
+      data-connected={String(status.connected)}
+      data-connecting={String(status.connecting)}
+      data-upload-error={uploadError ? 'true' : 'false'}
+      data-download-error={downloadError ? 'true' : 'false'}
+      title={title} className={cx('flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium', tone)}>
       {icon}
       {!compact && <span className="truncate">{label}</span>}
     </div>

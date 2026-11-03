@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { KeyRound, UserMinus, Copy, Check } from 'lucide-react'
+import { KeyRound, UserMinus, Check } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { deleteRow } from '@/lib/data'
 import { Button, Field, Input, Modal } from './ui'
@@ -24,35 +24,35 @@ export function ResetPasswordButton({ member }: { member: Member }) {
   async function save() {
     setBusy(true)
     setErr(null)
-    const { error } = await supabase.rpc('admin_set_member_password', { p_member_id: member.id, p_password: pw })
+    const { error } = await supabase.rpc('admin_set_member_password', { p_member_id: member.id, p_password: pw.trim() })
     setBusy(false)
-    if (error) setErr(navigator.onLine && !/fetch/i.test(error.message) ? error.message : 'You need to be online to reset a password.')
+    if (error) setErr(navigator.onLine && !/fetch/i.test(error.message) ? error.message : 'You need to be online to set a password.')
     else setDone(true)
   }
 
   return (
     <>
-      <Button size="sm" variant="ghost" onClick={() => { setPw(tempPassword()); setDone(false); setErr(null); setOpen(true) }}>
-        <KeyRound size={13} />Reset password
+      <Button size="sm" variant="ghost" onClick={() => { setPw(''); setDone(false); setErr(null); setOpen(true) }}>
+        <KeyRound size={13} />Set password
       </Button>
       <Modal
         open={open}
         onClose={() => setOpen(false)}
-        title={`Reset password for ${name}`}
+        title={`Set password for ${name}`}
         footer={done ? <Button onClick={() => setOpen(false)}>Done</Button> : <><Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={save} disabled={busy || pw.length < 8}>Set password</Button></>}
       >
         {done ? (
           <div className="space-y-3 text-sm text-slate-600">
             <p className="flex items-center gap-2 font-medium text-emerald-700"><Check size={16} />Password changed.</p>
-            <p>Give {name} this temporary password. They can change it under Settings → Your profile.</p>
+            <p>{name} can now sign in with this password:</p>
             <p className="rounded-lg bg-slate-100 px-3 py-2 text-center font-mono text-lg tracking-wider text-slate-900">{pw}</p>
           </div>
         ) : (
           <div className="space-y-3">
-            <Field label="Temporary password" hint="At least 8 characters. You'll tell them this password.">
+            <Field label="New password" hint="At least 8 characters.">
               <div className="flex gap-2">
-                <Input value={pw} onChange={(e) => setPw(e.target.value)} className="font-mono" />
-                <Button variant="secondary" type="button" onClick={() => navigator.clipboard.writeText(pw)} title="Copy"><Copy size={14} /></Button>
+                <Input value={pw} onChange={(e) => setPw(e.target.value)} className="font-mono" autoFocus />
+                <Button variant="secondary" type="button" onClick={() => setPw(tempPassword())} title="Make one up for me">Generate</Button>
               </div>
             </Field>
             {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}

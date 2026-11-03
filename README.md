@@ -66,9 +66,9 @@ never bundled.
 * Only a *different* person signing in on a computer replaces the local data, and
   the sign-in screen warns first if that would lose unsynced changes. To hand a
   computer to someone else, reset Windows (laptops use BitLocker for data at rest).
-* **Forgot password:** an admin opens **Settings → Team → Reset password**, gets a
-  temporary password to give the technician, and the technician changes it under
-  **Settings → Your profile → Change password**. No email links involved.
+* **Forgot password:** an admin opens **Settings → Team → Set password** and types a
+  new one (passwords are stored one-way hashed, so nobody can *view* them). Anyone can
+  also change their own under **Settings → Your profile**. No email links involved.
 * **Someone leaves:** **Settings → Team → Remove**. They lose access immediately and
   the company data is removed from their laptop the next time it connects. Their past
   calibrations are kept. A company can never remove or demote its last admin.

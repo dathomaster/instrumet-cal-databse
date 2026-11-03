@@ -92,7 +92,7 @@ export function Login() {
           {mode === 'in' && (
             forgot ? (
               <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Ask your admin to reset it: <strong>Settings → Team → Reset password</strong>. They’ll give you a temporary password you can change after signing in.
+                Ask your admin to set a new one for you (Settings → Team → Set password).
               </p>
             ) : (
               <button type="button" className="block w-full text-center text-xs text-slate-500 hover:text-slate-800" onClick={() => setForgot(true)}>Forgot password?</button>

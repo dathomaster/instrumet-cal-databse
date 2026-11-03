@@ -13,16 +13,27 @@ function useAutoSave({ table, rowId, field, value }: Common) {
   const remote = value === null || value === undefined ? '' : String(value)
   const [v, setV] = useState(remote)
   const focused = useRef(false)
+  // What the field showed when the technician clicked in. Only a change made by
+  // *them* is saved — merely focusing and leaving a field must never write a
+  // stale value over someone else's newer edit.
+  const atFocus = useRef(remote)
   useEffect(() => {
     if (!focused.current) setV(remote)
   }, [remote])
   return {
     value: v,
     onChange: (e: { target: { value: string } }) => setV(e.target.value),
-    onFocus: () => { focused.current = true },
+    onFocus: () => {
+      focused.current = true
+      atFocus.current = v
+    },
     onBlur: async () => {
       focused.current = false
-      if (v !== remote) await updateRow(table, rowId, { [field]: v }, { [field]: remote })
+      if (v !== atFocus.current) {
+        await updateRow(table, rowId, { [field]: v }, { [field]: atFocus.current })
+      } else if (v !== remote) {
+        setV(remote) // untouched: catch up with any change made meanwhile by someone else
+      }
     }
   }
 }

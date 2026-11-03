@@ -113,7 +113,18 @@ repo's public Releases; if the repo is made private, the update host must change
 | `tests/e2e-sync.cjs` | Two-laptop end-to-end sync test (online, offline, reconnect, live edits) |
 | `tests/e2e-auth.cjs` | Approval flow, offline sign-out/sign-in, restart offline, auto-resume |
 | `tests/e2e-admin.cjs` | Admin password reset, change password, remove a technician |
+| `tests/e2e-concurrent.cjs` | Two people editing the same field: no silent overwrites, last real edit wins |
 | `.github/workflows/release.yml` | Builds + publishes the Windows installer when a `v*` tag is pushed |
+
+## When several people edit the same thing
+
+* Different fields of the same record: **both changes are kept** (only changed fields upload).
+* The same field: **the last change to reach the server wins**, and every screen converges to it.
+  An offline edit counts when it is uploaded, not when it was made.
+* Clicking into a field and leaving without typing never saves anything, so it can't
+  overwrite someone else's newer value.
+* Delete vs. edit: the delete wins; a rejected follow-up change appears in
+  *Settings → Changes the server rejected*.
 
 ## Conventions for new screens
 

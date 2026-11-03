@@ -10,7 +10,7 @@ import { DueBadge, ResultBadge } from '@/components/DueBadge'
 import { deleteRow, updateRow } from '@/lib/data'
 import { dateOnly, dueState, fmtDate, nowISO, todayISO } from '@/lib/format'
 import { judge, limits, overallAsFound, overallAsLeft, percentOfTolerance, type PointLike } from '@/lib/calibration'
-import { completeCalibration, reopenCalibration } from '@/lib/calibrationActions'
+import { completeCalibration, countMissingReadings, deleteCalibration, reopenCalibration } from '@/lib/calibrationActions'
 import { db } from '@/powersync/db'
 import type { Calibration, CalibrationPoint, Equipment, ReferenceStandard } from '@/powersync/AppSchema'
 
@@ -67,12 +67,16 @@ export function CalibrationEditor() {
         subtitle={eq ? `${eq.customer_name} · ${eq.description}${eq.serial_number ? ` · S/N ${eq.serial_number}` : ''}` : undefined}
         actions={
           <>
-            <ConfirmDelete what="calibration" onConfirm={async () => { await deleteRow('calibrations', id); nav(eq ? `/equipment/${eq.id}` : '/calibrations') }} />
+            <ConfirmDelete what="calibration" onConfirm={async () => { await deleteCalibration(id); nav(eq ? `/equipment/${eq.id}` : '/calibrations') }} />
             <Button variant="secondary" onClick={() => nav(`/calibrations/${id}/certificate`)}><FileText size={15} />Certificate</Button>
             {locked ? (
               <Button variant="secondary" onClick={() => reopenCalibration(id)}><RotateCcw size={15} />Reopen to edit</Button>
             ) : (
-              <Button onClick={() => completeCalibration(id)} disabled={!eq || points.length === 0} title={points.length === 0 ? 'Add at least one measurement point' : undefined}>
+              <Button onClick={() => {
+                const missing = countMissingReadings(points)
+                if (missing && !confirm(`${missing} measurement point${missing === 1 ? ' has' : 's have'} no as-found reading. Complete anyway?`)) return
+                completeCalibration(id)
+              }} disabled={!eq || points.length === 0} title={points.length === 0 ? 'Add at least one measurement point' : undefined}>
                 <CheckCircle2 size={16} />Complete calibration
               </Button>
             )}
@@ -91,7 +95,7 @@ export function CalibrationEditor() {
         <Card className="lg:col-span-2">
           <CardHeader title="Calibration details" />
           <div className="grid grid-cols-2 gap-4 p-5 md:grid-cols-3">
-            <Field label="Date performed"><AutoInput {...C} field="performed_at" value={dateOnly(cal.performed_at) || todayISO()} type="date" boxed disabled={locked} /></Field>
+            <Field label="Date performed"><AutoInput {...C} field="performed_at" value={dateOnly(cal.performed_at) || todayISO()} type="date" boxed disabled={locked} required /></Field>
             <Field label="Due date (blank = by interval)"><AutoInput {...C} field="due_at" value={dateOnly(cal.due_at)} type="date" boxed disabled={locked} /></Field>
             <Field label="Technician"><AutoInput {...C} field="technician_name" value={cal.technician_name} boxed disabled={locked} /></Field>
             <Field label="Procedure" className="col-span-2 md:col-span-1"><AutoInput {...C} field="procedure" value={cal.procedure} placeholder="e.g. SOP-PR-001 rev C" boxed disabled={locked} /></Field>

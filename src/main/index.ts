@@ -103,7 +103,22 @@ function setupAutoUpdates(): void {
 }
 ipcMain.handle('install-update', () => autoUpdater.quitAndInstall())
 
+// Only one copy of the app may run: two processes writing the same local
+// database could corrupt it. A second launch just focuses the existing window.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }
+  })
+}
+
 app.whenReady().then(() => {
+  if (!app.hasSingleInstanceLock()) return
   setupAutoUpdates()
   registerAppProtocol()
   if (!isDev) {

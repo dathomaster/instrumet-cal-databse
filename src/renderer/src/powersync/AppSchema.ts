@@ -113,6 +113,7 @@ const calibrations = new Table(
     as_left_result: column.text,
     status: column.text,
     standards_used: column.text,
+    standards_snapshot: column.text,
     notes: column.text,
     created_at: column.text,
     updated_at: column.text

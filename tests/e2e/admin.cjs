@@ -1,0 +1,38 @@
+// Admin sets a technician's password; they change it; admin removes them.
+const h = require('./helpers.cjs')
+
+h.run('ADMIN', async () => {
+  const A = await h.launch('A'), B = await h.launch('B')
+  await h.signIn(A, h.TECH1)
+  await h.nav(A, 'Settings')
+  const row = A.page.getByRole('row').filter({ hasText: h.TECH2 })
+  await row.getByRole('button', { name: 'Set password' }).click()
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Generate' }).click()
+  const temp = await A.page.getByRole('dialog').getByLabel('New password').inputValue()
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Set password' }).click()
+  await A.page.getByText('Password changed.').waitFor({ timeout: 20000 })
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Done' }).click()
+
+  await h.signIn(B, h.TECH2, h.PW, { expectDashboard: false })
+  await B.page.getByText('Invalid login credentials').waitFor({ timeout: 20000 })
+  await h.signIn(B, h.TECH2, temp)
+  h.log('admin set a password: old one refused, new one works')
+
+  await h.nav(B, 'Settings')
+  h.check((await B.page.getByRole('button', { name: 'Set password' }).count()) === 0, 'technician sees admin buttons')
+  await B.page.getByRole('button', { name: 'Change password' }).click()
+  await B.page.getByRole('dialog').getByLabel('New password', { exact: true }).fill('Brand-new-pass-42')
+  await B.page.getByRole('dialog').getByLabel('Repeat new password').fill('Brand-new-pass-42')
+  await B.page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await B.page.getByRole('dialog').getByText('Password changed.').waitFor({ timeout: 20000 })
+  await B.page.getByRole('dialog').getByRole('button', { name: 'Done' }).click()
+  h.log('technician changed own password')
+
+  await row.getByRole('button', { name: 'Remove' }).click()
+  await A.page.getByRole('dialog').getByRole('button', { name: 'Remove' }).click()
+  const t = Date.now()
+  await B.page.getByText('isn’t part of a company').waitFor({ timeout: 60000 })
+  h.log(`removed technician lost access in ${((Date.now() - t) / 1000).toFixed(1)}s`)
+  h.check((await A.page.getByRole('row').filter({ hasText: h.TECH1 }).getByRole('button', { name: 'Remove' }).count()) === 0, 'admin can remove themselves')
+  await A.app.close(); await B.app.close()
+})

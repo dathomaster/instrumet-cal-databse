@@ -110,10 +110,8 @@ repo's public Releases; if the repo is made private, the update host must change
 | `src/main/` | Electron main process (secure `app://` scheme, CSP, Save-as-PDF) |
 | `src/renderer/src/powersync/` | Client schema, database, Supabase connector (`uploadData`, `fetchCredentials`) |
 | `src/renderer/src/pages/` | Screens |
-| `tests/e2e-sync.cjs` | Two-laptop end-to-end sync test (online, offline, reconnect, live edits) |
-| `tests/e2e-auth.cjs` | Approval flow, offline sign-out/sign-in, restart offline, auto-resume |
-| `tests/e2e-admin.cjs` | Admin password reset, change password, remove a technician |
-| `tests/e2e-concurrent.cjs` | Two people editing the same field: no silent overwrites, last real edit wins |
+| `tests/unit/` | Fast unit tests (pass/fail math, dates, upload error rules) |
+| `tests/e2e/` + `scripts/e2e.mjs` | End-to-end tests driving real app windows against Supabase + PowerSync |
 | `.github/workflows/release.yml` | Builds + publishes the Windows installer when a `v*` tag is pushed |
 
 ## When several people edit the same thing
@@ -125,6 +123,30 @@ repo's public Releases; if the repo is made private, the update host must change
   overwrite someone else's newer value.
 * Delete vs. edit: the delete wins; a rejected follow-up change appears in
   *Settings → Changes the server rejected*.
+
+## Testing
+
+```bash
+npm test             # unit tests, ~1 second, no internet needed
+npm run test:e2e     # end-to-end, ~2 minutes, needs internet + SUPABASE_ACCESS_TOKEN in .env
+npm run test:e2e -- edge auth   # just some suites
+```
+
+`test:e2e` builds the app, creates a throwaway **E2E Test Co** with two test
+technicians, runs every suite with two real app windows (two "laptops"), and always
+deletes the test company and users afterwards. It never touches other companies'
+data. Screenshots land in `test-results/`.
+
+| Suite | What it proves |
+|---|---|
+| `sync` | Live sync between laptops, offline work, reconnect, live corrections, restart offline |
+| `concurrent` | Two people on the same field: no silent overwrite; last real edit wins |
+| `edge` | One app copy at a time; required fields; empty-reading warning; date corrections recompute due dates; certificates keep standards as of completion; offline cascade deletes; edits to deleted records are set aside without blocking the queue |
+| `auth` | Approval, sign-out and sign-in while offline, restart offline, automatic resume |
+| `admin` | Set password, change password, remove a technician |
+
+Run both before publishing a release. **Apply database migrations before releasing
+an app version that uses new columns**; otherwise uploads of those columns are rejected.
 
 ## Conventions for new screens
 

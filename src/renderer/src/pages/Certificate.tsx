@@ -7,6 +7,7 @@ import { judge, limits, type PointLike } from '@/lib/calibration'
 import type { Calibration, CalibrationPoint, Customer, Equipment, ReferenceStandard } from '@/powersync/AppSchema'
 
 import '@/lib/desktop'
+import type { StandardSnapshot } from '@/lib/calibrationActions'
 
 const label = (r: string | null) => (r ? r.charAt(0).toUpperCase() + r.slice(1) : '—')
 
@@ -24,7 +25,14 @@ export function Certificate() {
   const eq = eqs[0]
   const cust = custs[0]
   const usedIds: string[] = (() => { try { return JSON.parse(cal.standards_used || '[]') } catch { return [] } })()
-  const used = allStd.filter((s) => usedIds.includes(s.id))
+  // Completed calibrations show the standards exactly as they were when the
+  // calibration was completed (traceability); drafts show the live records.
+  const snapshot: StandardSnapshot[] | null = (() => {
+    if (cal.status !== 'completed' || !cal.standards_snapshot) return null
+    try { return JSON.parse(cal.standards_snapshot) } catch { return null }
+  })()
+  const used: { id: string; name: string | null; serial_number: string | null; certificate_number: string | null; due_at: string | null }[] =
+    snapshot ?? allStd.filter((s) => usedIds.includes(s.id))
 
   return (
     <div>

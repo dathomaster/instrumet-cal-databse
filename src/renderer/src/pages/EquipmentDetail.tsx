@@ -7,11 +7,10 @@ import { BackLink } from '@/components/BackLink'
 import { ConfirmDelete } from '@/components/ConfirmDelete'
 import { EquipmentForm } from '@/components/forms'
 import { DueBadge, ResultBadge } from '@/components/DueBadge'
-import { deleteRow } from '@/lib/data'
 import { fmtDate, joinNonEmpty } from '@/lib/format'
 import { useMe } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
-import { startCalibration } from '@/lib/calibrationActions'
+import { deleteEquipment, startCalibration } from '@/lib/calibrationActions'
 import type { Calibration, Equipment } from '@/powersync/AppSchema'
 
 export function EquipmentDetail() {
@@ -47,7 +46,7 @@ export function EquipmentDetail() {
         subtitle={joinNonEmpty([e.manufacturer, e.model, e.serial_number && `S/N ${e.serial_number}`], ' · ')}
         actions={
           <>
-            <ConfirmDelete what="equipment" detail={`This also deletes ${cals.length} calibration record(s).`} onConfirm={async () => { await deleteRow('equipment', id); nav(`/customers/${e.customer_id}`) }} />
+            <ConfirmDelete what="equipment" detail={`This also deletes ${cals.length} calibration record(s).`} onConfirm={async () => { await deleteEquipment(id); nav(`/customers/${e.customer_id}`) }} />
             <Button variant="secondary" onClick={() => setEditing(true)}><Pencil size={15} />Edit</Button>
             <Button onClick={newCal} disabled={!me}><Plus size={16} />New calibration</Button>
           </>

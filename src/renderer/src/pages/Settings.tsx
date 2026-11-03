@@ -44,7 +44,7 @@ export function Settings() {
         <Card>
           <CardHeader title="Company" subtitle={isAdmin ? undefined : 'Only admins can rename the company'} />
           <div className="space-y-4 p-5">
-            {me && <Field label="Company name (appears on certificates)"><AutoInput table="organizations" rowId={me.org_id!} field="name" value={me.org_name} boxed disabled={!isAdmin} /></Field>}
+            {me && <Field label="Company name (appears on certificates)"><AutoInput table="organizations" rowId={me.org_id!} field="name" value={me.org_name} boxed disabled={!isAdmin} required /></Field>}
           </div>
         </Card>
 

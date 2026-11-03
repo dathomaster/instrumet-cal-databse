@@ -7,7 +7,7 @@ import { BackLink } from '@/components/BackLink'
 import { ConfirmDelete } from '@/components/ConfirmDelete'
 import { CustomerForm, EquipmentForm } from '@/components/forms'
 import { DueBadge } from '@/components/DueBadge'
-import { deleteRow } from '@/lib/data'
+import { deleteCustomer } from '@/lib/calibrationActions'
 import { fmtDate, joinNonEmpty } from '@/lib/format'
 import type { Customer, Equipment } from '@/powersync/AppSchema'
 
@@ -32,7 +32,7 @@ export function CustomerDetail() {
         subtitle={joinNonEmpty([c.city, c.state])}
         actions={
           <>
-            <ConfirmDelete what="customer" detail={`This also deletes ${equipment.length} equipment record(s) and all of their calibrations.`} onConfirm={async () => { await deleteRow('customers', id); nav('/customers') }} />
+            <ConfirmDelete what="customer" detail={`This also deletes ${equipment.length} equipment record(s) and all of their calibrations.`} onConfirm={async () => { await deleteCustomer(id); nav('/customers') }} />
             <Button variant="secondary" onClick={() => setEditing(true)}><Pencil size={15} />Edit</Button>
           </>
         }

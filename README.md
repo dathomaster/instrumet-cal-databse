@@ -115,6 +115,17 @@ repo's public Releases; if the repo is made private, the update host must change
 | `tests/e2e-admin.cjs` | Admin password reset, change password, remove a technician |
 | `.github/workflows/release.yml` | Builds + publishes the Windows installer when a `v*` tag is pushed |
 
+## Conventions for new screens
+
+* Read data with **`useRows(sql, params)`** (`src/renderer/src/lib/useRows.ts`), not raw
+  `useQuery`. It's PowerSync's recommended incremental watch query with a row
+  comparator: components only re-render when results actually change.
+* Render list rows as **`React.memo`** components that take the row object as a prop
+  (see `CustomerRow`, `PointRow`), so only changed rows re-render.
+* Write with `insertRow` / `updateRow` / `deleteRow` (`lib/data.ts`). `updateRow`
+  only writes changed columns, so concurrent edits to different fields merge.
+* Never call `db.connect()` yourself; `lib/auth.tsx` owns connect/disconnect.
+
 ## Changing the schema
 
 1. Add a migration in `supabase/migrations/`, apply it, and add any new table to the

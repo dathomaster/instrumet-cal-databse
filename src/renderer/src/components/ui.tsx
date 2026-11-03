@@ -1,5 +1,5 @@
-import { useEffect, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react'
+import { Eye, EyeOff, X } from 'lucide-react'
 
 export function cx(...c: (string | false | null | undefined)[]): string {
   return c.filter(Boolean).join(' ')
@@ -38,6 +38,26 @@ const inputCls =
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(inputCls, className)} />
 }
+/** Password box with an eye button to show/hide what you're typing. */
+export function PasswordInput({ className, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="relative">
+      <input {...props} type={show ? 'text' : 'password'} className={cx(inputCls, 'pr-10', className)} />
+      <button
+        type="button"
+        tabIndex={-1}
+        onClick={(e) => { e.preventDefault(); setShow((v) => !v) }}
+        className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-700"
+        aria-label={show ? 'Hide password' : 'Show password'}
+        title={show ? 'Hide password' : 'Show password'}
+      >
+        {show ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    </div>
+  )
+}
+
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea rows={3} {...props} className={cx(inputCls, className)} />
 }

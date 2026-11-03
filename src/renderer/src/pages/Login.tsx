@@ -3,7 +3,7 @@ import { AlertTriangle, Gauge, Loader2, WifiOff } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useOnline } from '@/lib/hooks'
 import { db } from '@/powersync/db'
-import { Button, Field, Input } from '@/components/ui'
+import { Button, Field, Input, PasswordInput } from '@/components/ui'
 
 export function Login() {
   const { signIn, signUp, deviceUser } = useAuth()
@@ -63,8 +63,7 @@ export function Login() {
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" autoFocus={!email} />
           </Field>
           <Field label="Password">
-            <Input
-              type="password"
+            <PasswordInput
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required

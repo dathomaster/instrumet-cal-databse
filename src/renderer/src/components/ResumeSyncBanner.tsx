@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { KeyRound } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
-import { Button, Field, Input, Modal } from './ui'
+import { Button, Field, Modal, PasswordInput } from './ui'
 
 /** Non-blocking: work continues locally; syncing resumes after the password. */
 export function ResumeSyncBanner() {
@@ -36,7 +36,7 @@ export function ResumeSyncBanner() {
       >
         <form onSubmit={(e) => { e.preventDefault(); submit() }} className="space-y-3">
           <p className="text-sm text-slate-600">The server asked {deviceUser?.email} to sign in again (for example after a password change).</p>
-          <Field label="Password"><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus /></Field>
+          <Field label="Password"><PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoFocus /></Field>
           {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
         </form>
       </Modal>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { rememberLocalLogin } from '@/lib/localLogin'
 import { useAuth } from '@/lib/auth'
-import { Button, Field, Input, Modal } from './ui'
+import { Button, Field, Modal, PasswordInput } from './ui'
 
 export function ChangePasswordButton() {
   const { user } = useAuth()
@@ -37,8 +37,8 @@ export function ChangePasswordButton() {
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save() }}>
           {!msg?.ok && (
             <>
-              <Field label="New password"><Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" autoFocus /></Field>
-              <Field label="Repeat new password"><Input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" /></Field>
+              <Field label="New password"><PasswordInput value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" autoFocus /></Field>
+              <Field label="Repeat new password"><PasswordInput value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" /></Field>
             </>
           )}
           {msg && <p className={msg.ok ? 'rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700' : 'rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700'}>{msg.text}</p>}

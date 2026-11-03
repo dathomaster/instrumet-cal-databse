@@ -24,6 +24,13 @@ export function connectOnce(): void {
   db.connect(connector)
 }
 
+/** Stop syncing but keep all local data (and unsynced changes) on this computer. */
+export async function disconnect(): Promise<void> {
+  connected = false
+  await db.disconnect()
+}
+
+/** Stop syncing and erase all local data. */
 export async function disconnectAndClear(): Promise<void> {
   connected = false
   await db.disconnectAndClear()

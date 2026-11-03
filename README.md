@@ -50,14 +50,24 @@ Only `SUPABASE_URL`, `SUPABASE_ANON_KEY` (publishable key) and `POWERSYNC_URL`
 are built into the app. The admin tokens in `.env` are for the CLI only and are
 never bundled.
 
-## First-time setup
+## Accounts & signing in
 
-1. The **first person to create an account becomes the company admin**; everyone
-   after joins as a technician (see `private.handle_new_user` in the migration).
-2. Once your team has accounts, **turn off public sign-ups**: Supabase dashboard →
-   Authentication → Sign In / Providers → disable "Allow new users to sign up".
-   Invite new technicians from the dashboard after that.
-3. Rename the company under **Settings** (it prints on certificates).
+* **The first account created becomes the company admin.** Everyone after that
+  creates an account in the app and sees *Waiting for approval* until an admin
+  clicks **Approve** in **Settings → Team**. Their screen unlocks by itself.
+  Pending accounts receive no company data, so sign-ups can stay open.
+* **You can't get locked out of your own work.** Signing out keeps your data on
+  the computer, and you can sign back in **without internet**. The password is
+  checked against a salted PBKDF2 fingerprint saved at your last online sign-in;
+  the password itself is never stored. Syncing resumes automatically once the
+  connection is back.
+* Sessions never expire on their own (Supabase session time-box and inactivity
+  timeout are off), so technicians stay signed in through long offline stretches.
+* Only a *different* person signing in on a computer replaces the local data, and
+  the sign-in screen warns first if that would lose unsynced changes. To hand a
+  computer over, use **Sign out → Erase data from this computer**.
+* Changes are never dropped because of a sign-in problem: uploads wait for a valid
+  session and only genuinely invalid changes go to *Settings → Changes the server rejected*.
 
 ## Project layout
 
@@ -70,6 +80,7 @@ never bundled.
 | `src/renderer/src/powersync/` | Client schema, database, Supabase connector (`uploadData`, `fetchCredentials`) |
 | `src/renderer/src/pages/` | Screens |
 | `tests/e2e-sync.cjs` | Two-laptop end-to-end sync test (online, offline, reconnect, live edits) |
+| `tests/e2e-auth.cjs` | Approval flow, offline sign-out/sign-in, restart offline, auto-resume |
 
 ## Changing the schema
 

@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { Gauge, Users, Wrench, ClipboardCheck, Ruler, Settings, LayoutDashboard } from 'lucide-react'
 import { SyncIndicator } from './SyncIndicator'
+import { ResumeSyncBanner } from './ResumeSyncBanner'
 import { useMe } from '@/lib/hooks'
 import { useAuth } from '@/lib/auth'
 import { cx } from './ui'
@@ -62,6 +63,7 @@ export function Layout() {
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto">
+        <ResumeSyncBanner />
         <div className="mx-auto max-w-6xl px-8 py-8">
           <Outlet />
         </div>

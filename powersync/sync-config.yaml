@@ -3,11 +3,19 @@
 config:
   edition: 3
 
-# Organizations the signed-in technician belongs to (from the Supabase JWT `sub`)
+# Organizations the signed-in technician is an approved member of
+# (from the Supabase JWT `sub`). Pending sign-ups get no company data.
 with:
-  user_orgs: SELECT org_id FROM org_members WHERE user_id = auth.user_id()
+  user_orgs: SELECT org_id FROM org_members WHERE user_id = auth.user_id() AND role != 'pending'
 
 streams:
+  # Your own membership row, even while pending, so the app can show
+  # "waiting for approval" and unlock as soon as an admin approves.
+  my_membership:
+    auto_subscribe: true
+    priority: 1
+    query: SELECT * FROM org_members WHERE user_id = auth.user_id()
+
   # Everything a technician needs to work fully offline. Uses one stream with
   # multiple queries to keep bucket count low.
   org_data:

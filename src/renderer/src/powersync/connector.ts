@@ -8,14 +8,19 @@ import type {
 import { supabase } from '@/lib/supabase'
 import { config } from '@/lib/config'
 
+type OpError = { code?: string; message: string; status?: number }
+
 /**
  * Postgres error classes that will never succeed on retry:
  *  22xxx data exception, 23xxx integrity violation, 42501 RLS / permission,
  *  PGRST1xx/2xx request errors. Retrying them would block the upload queue
  *  forever, so they are recorded locally and skipped.
  */
-function isPermanent(error: { code?: string } | null | undefined): boolean {
-  const code = error?.code ?? ''
+function isPermanent(error: OpError): boolean {
+  // 401 = not (or no longer) signed in. Never drop a change for that — it
+  // succeeds once the technician's session is back.
+  if (error.status === 401) return false
+  const code = error.code ?? ''
   return /^(22|23)/.test(code) || code === '42501' || /^PGRST[12]/.test(code)
 }
 
@@ -26,7 +31,7 @@ function clean(data: Record<string, unknown> | undefined): Record<string, unknow
   return out
 }
 
-async function applyOp(op: CrudEntry): Promise<{ code?: string; message: string } | null> {
+async function applyOp(op: CrudEntry): Promise<OpError | null> {
   const table = supabase.from(op.table)
   let res
   switch (op.op) {
@@ -40,7 +45,7 @@ async function applyOp(op: CrudEntry): Promise<{ code?: string; message: string 
       res = await table.delete().eq('id', op.id)
       break
   }
-  return res?.error ?? null
+  return res?.error ? { code: res.error.code, message: res.error.message, status: res.status } : null
 }
 
 export class SupabaseConnector implements PowerSyncBackendConnector {
@@ -57,6 +62,11 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
   }
 
   async uploadData(database: AbstractPowerSyncDatabase): Promise<void> {
+    // Without a signed-in session every write would be refused as "anonymous"
+    // and wrongly treated as rejected. Wait (PowerSync retries) instead.
+    const { data } = await supabase.auth.getSession()
+    if (!data.session) throw new Error('Waiting for sign-in before uploading')
+
     const transaction = await database.getNextCrudTransaction()
     if (!transaction) return
 

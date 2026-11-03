@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useStatus } from '@powersync/react'
-import { AlertTriangle, LogOut, X } from 'lucide-react'
+import { AlertTriangle, Check, LogOut, X } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, Field, Modal, PageHeader, Select, td, th } from '@/components/ui'
 import { AutoInput } from '@/components/AutoInput'
 import { SyncIndicator } from '@/components/SyncIndicator'
 import { useAuth } from '@/lib/auth'
 import { useMe, usePendingUploads } from '@/lib/hooks'
-import { updateRow } from '@/lib/data'
+import { deleteRow, updateRow } from '@/lib/data'
 import { db } from '@/powersync/db'
 import type { OrgMember, UploadError } from '@/powersync/AppSchema'
 
@@ -16,8 +16,12 @@ export function Settings() {
   const status = useStatus()
   const pending = usePendingUploads()
   const [confirmOut, setConfirmOut] = useState(false)
+  const [erase, setErase] = useState(false)
   const isAdmin = me?.role === 'admin'
-  const { data: members } = useQuery<OrgMember & { id: string }>('SELECT * FROM org_members ORDER BY full_name COLLATE NOCASE')
+  const { data: members } = useQuery<OrgMember & { id: string }>(
+    "SELECT * FROM org_members ORDER BY role = 'pending' DESC, full_name COLLATE NOCASE"
+  )
+  const pendingMembers = members.filter((m) => m.role === 'pending')
   const { data: errors } = useQuery<UploadError & { id: string }>('SELECT * FROM upload_errors ORDER BY created_at DESC')
 
   return (
@@ -56,8 +60,8 @@ export function Settings() {
         <Card>
           <CardHeader title="Sign out" />
           <div className="space-y-3 p-5 text-sm text-slate-600">
-            <p>Signing out removes the local copy of your company’s data from this computer.</p>
-            <Button variant="danger" onClick={() => setConfirmOut(true)}><LogOut size={15} />Sign out</Button>
+            <p>Your data stays on this computer, so you can sign back in any time — even without internet.</p>
+            <Button variant="danger" onClick={() => { setErase(false); setConfirmOut(true) }}><LogOut size={15} />Sign out</Button>
           </div>
         </Card>
 
@@ -81,7 +85,10 @@ export function Settings() {
         )}
 
         <Card className="lg:col-span-2">
-          <CardHeader title="Team" subtitle={isAdmin ? 'New technicians join automatically when they create an account' : undefined} />
+          <CardHeader
+            title={<span className="flex items-center gap-2">Team {pendingMembers.length > 0 && <Badge tone="amber">{pendingMembers.length} waiting for approval</Badge>}</span>}
+            subtitle={isAdmin ? 'Technicians create an account in the app, then you approve them here' : undefined}
+          />
           <table className="w-full">
             <thead className="bg-slate-50/60"><tr><th className={th}>Name</th><th className={th}>Email</th><th className={th}>Role</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
@@ -90,7 +97,14 @@ export function Settings() {
                   <td className={`${td} font-medium text-slate-800`}>{m.full_name || '—'}{m.user_id === user?.id && <span className="ml-2 text-xs text-slate-400">(you)</span>}</td>
                   <td className={`${td} text-slate-600`}>{m.email}</td>
                   <td className={td}>
-                    {isAdmin && m.user_id !== user?.id ? (
+                    {m.role === 'pending' ? (
+                      isAdmin ? (
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => updateRow('org_members', m.id, { role: 'technician' }, { role: m.role })}><Check size={14} />Approve</Button>
+                          <Button size="sm" variant="ghost" className="text-red-600" onClick={() => confirm(`Decline ${m.email}? They won't get access to any data.`) && deleteRow('org_members', m.id)}>Decline</Button>
+                        </div>
+                      ) : <Badge tone="amber">Waiting for approval</Badge>
+                    ) : isAdmin && m.user_id !== user?.id ? (
                       <Select value={m.role ?? 'technician'} onChange={(e) => updateRow('org_members', m.id, { role: e.target.value }, { role: m.role })} className="w-36 py-1">
                         <option value="technician">Technician</option>
                         <option value="admin">Admin</option>
@@ -104,10 +118,25 @@ export function Settings() {
         </Card>
       </div>
 
-      <Modal open={confirmOut} onClose={() => setConfirmOut(false)} title="Sign out?" footer={<><Button variant="secondary" onClick={() => setConfirmOut(false)}>Cancel</Button><Button className="bg-red-600 hover:bg-red-700" onClick={signOut}>Sign out</Button></>}>
-        {pending > 0 ? (
-          <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{pending} change{pending === 1 ? ' has' : 's have'} not uploaded yet and will be lost. Connect to the internet and wait for sync to finish first.</p>
-        ) : <p className="text-sm text-slate-600">All your changes are synced. The local copy will be removed from this computer.</p>}
+      <Modal
+        open={confirmOut}
+        onClose={() => setConfirmOut(false)}
+        title="Sign out?"
+        footer={<><Button variant="secondary" onClick={() => setConfirmOut(false)}>Cancel</Button><Button className={erase ? 'bg-red-600 hover:bg-red-700' : undefined} onClick={() => signOut({ erase })}>{erase ? 'Sign out & erase' : 'Sign out'}</Button></>}
+      >
+        <div className="space-y-3 text-sm text-slate-600">
+          <p>Your data{pending > 0 ? ` and ${pending} unsynced change${pending === 1 ? '' : 's'}` : ''} stay on this computer. Sign back in any time — even offline — and pick up where you left off.</p>
+          <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3">
+            <input type="checkbox" className="mt-0.5 accent-red-600" checked={erase} onChange={(e) => setErase(e.target.checked)} />
+            <span>
+              <span className="font-medium text-slate-800">Erase data from this computer</span>
+              <span className="block text-xs text-slate-500">Only if you’re handing this computer to someone else.</span>
+            </span>
+          </label>
+          {erase && pending > 0 && (
+            <p className="flex gap-2 rounded-lg bg-amber-50 p-3 text-amber-800"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{pending} change{pending === 1 ? ' has' : 's have'} not uploaded yet and will be lost. Connect to the internet and wait for sync to finish first.</p>
+          )}
+        </div>
       </Modal>
     </>
   )

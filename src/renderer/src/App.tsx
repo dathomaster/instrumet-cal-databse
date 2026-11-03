@@ -1,6 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { PowerSyncContext, useStatus } from '@powersync/react'
-import { Loader2, ShieldAlert } from 'lucide-react'
+import { Clock, Loader2, ShieldAlert } from 'lucide-react'
 import { AuthProvider, useAuth } from '@/lib/auth'
 import { useMe } from '@/lib/hooks'
 import { db } from '@/powersync/db'
@@ -26,7 +26,20 @@ function Centered({ children }: { children: React.ReactNode }) {
 function Gate() {
   const { me, isLoading } = useMe()
   const status = useStatus()
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
+  if (me?.role === 'pending') {
+    return (
+      <Centered>
+        <Clock className="text-brand-600" size={28} />
+        <div className="text-base font-medium text-slate-800">Waiting for approval</div>
+        <div className="max-w-sm">
+          Your account ({user?.email}) has been created. An admin needs to approve it under Settings → Team.
+          This screen unlocks by itself as soon as they do.
+        </div>
+        <Button variant="secondary" onClick={() => signOut()}>Sign out</Button>
+      </Centered>
+    )
+  }
   if (!me) {
     if (isLoading || !status.hasSynced) {
       return (
@@ -42,7 +55,7 @@ function Gate() {
         <ShieldAlert className="text-amber-500" size={28} />
         <div className="font-medium text-slate-700">Your account isn’t part of a company yet</div>
         <div>Ask your administrator to add you, then sign in again.</div>
-        <Button variant="secondary" onClick={signOut}>Sign out</Button>
+        <Button variant="secondary" onClick={() => signOut()}>Sign out</Button>
       </Centered>
     )
   }
@@ -66,9 +79,8 @@ function Gate() {
 }
 
 function Shell() {
-  const { user, needsSignIn } = useAuth()
+  const { user } = useAuth()
   if (!user) return <Login />
-  if (needsSignIn) return <Login reauth />
   // key: remount everything if the signed-in user changes
   return <Gate key={user.id} />
 }

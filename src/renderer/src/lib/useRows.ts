@@ -1,17 +1,21 @@
 import { useQuery } from '@powersync/react'
 
 /**
- * Row comparator recommended by the PowerSync docs ("Incremental Watch Queries"):
- * rows are matched by `id` (or, for rows without one, by their full contents)
- * and compared by their full JSON.
+ * Row comparator for incremental watch queries ("Incremental Watch Queries" in
+ * the PowerSync docs). This is an exact copy of PowerSync's own built-in
+ * DEFAULT_ROW_COMPARATOR (@powersync/shared-internals, DifferentialQueryProcessor),
+ * which the SDK marks @internal and doesn't export: rows are keyed by their
+ * string `id` (or their full JSON if they have none) and compared by full JSON.
  * Module-level constant so the hook options stay referentially stable.
  */
 export const ROW_COMPARATOR = {
-  keyBy: (row: unknown) => {
-    const id = (row as { id?: unknown })?.id
-    return id != null ? String(id) : JSON.stringify(row)
+  keyBy: (item: unknown): string => {
+    if (item && typeof item == 'object' && typeof (item as Record<string, unknown>)['id'] == 'string') {
+      return (item as Record<string, string>)['id']
+    }
+    return JSON.stringify(item)
   },
-  compareBy: (row: unknown) => JSON.stringify(row)
+  compareBy: (item: unknown): string => JSON.stringify(item)
 }
 
 /**

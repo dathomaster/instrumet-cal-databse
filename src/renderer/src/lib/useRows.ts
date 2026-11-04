@@ -3,9 +3,13 @@ import { useQuery } from '@powersync/react'
 /**
  * Row comparator for incremental watch queries ("Incremental Watch Queries" in
  * the PowerSync docs). This is an exact copy of PowerSync's own built-in
- * DEFAULT_ROW_COMPARATOR (@powersync/shared-internals, DifferentialQueryProcessor),
- * which the SDK marks @internal and doesn't export: rows are keyed by their
- * string `id` (or their full JSON if they have none) and compared by full JSON.
+ * DEFAULT_ROW_COMPARATOR (DifferentialQueryProcessor in @powersync/shared-internals).
+ * The docs' examples refer to that constant, but it is marked @internal and is not
+ * exported from the packages apps use (@powersync/web, @powersync/common,
+ * @powersync/react); importing the internal package directly would depend on a
+ * transitive dependency. If a future SDK exports it publicly, import it instead.
+ * Rows are keyed by their string `id` (or their full JSON if they have none)
+ * and compared by full JSON.
  * Module-level constant so the hook options stay referentially stable.
  */
 export const ROW_COMPARATOR = {

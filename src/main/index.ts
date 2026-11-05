@@ -103,6 +103,20 @@ function setupAutoUpdates(): void {
 }
 ipcMain.handle('install-update', () => autoUpdater.quitAndInstall())
 
+// Save text (e.g. a calibration CSV) where the technician chooses.
+ipcMain.handle('save-text-file', async (event, suggestedName: string, content: string) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return { ok: false }
+  const ext = (suggestedName.split('.').pop() || 'txt').toLowerCase()
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    defaultPath: suggestedName,
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }]
+  })
+  if (canceled || !filePath) return { ok: false }
+  await writeFile(filePath, content, 'utf8')
+  return { ok: true, filePath }
+})
+
 // Only one copy of the app may run: two processes writing the same local
 // database could corrupt it. A second launch just focuses the existing window.
 if (!app.requestSingleInstanceLock()) {

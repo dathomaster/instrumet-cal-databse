@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Gauge, Users, Wrench, ClipboardCheck, Ruler, Settings, LayoutDashboard } from 'lucide-react'
+import { CalendarCheck, Gauge, Users, Wrench, ClipboardCheck, Ruler, Settings, LayoutDashboard } from 'lucide-react'
 import { SyncIndicator } from './SyncIndicator'
 import { ResumeSyncBanner } from './ResumeSyncBanner'
 import { UpdateBanner } from './UpdateBanner'
@@ -9,6 +9,7 @@ import { cx } from './ui'
 
 const nav = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/visits', label: 'Visits', icon: CalendarCheck },
   { to: '/customers', label: 'Customers', icon: Users },
   { to: '/equipment', label: 'Equipment', icon: Wrench },
   { to: '/calibrations', label: 'Calibrations', icon: ClipboardCheck },

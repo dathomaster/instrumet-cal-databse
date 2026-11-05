@@ -1,16 +1,17 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, RotateCcw } from 'lucide-react'
 import { useRows } from '@/lib/useRows'
-import { CheckCircle2, FileText, Plus, RotateCcw, Trash2, AlertTriangle } from 'lucide-react'
 import { Badge, Button, Card, CardHeader, EmptyState, Field, PageHeader, cx } from '@/components/ui'
 import { BackLink } from '@/components/BackLink'
 import { ConfirmDelete } from '@/components/ConfirmDelete'
 import { AutoInput, AutoTextarea } from '@/components/AutoInput'
 import { DueBadge, ResultBadge } from '@/components/DueBadge'
-import { deleteRow, updateRow } from '@/lib/data'
-import { dateOnly, dueState, fmtDate, nowISO, todayISO } from '@/lib/format'
-import { judge, limits, overallAsFound, overallAsLeft, percentOfTolerance, type PointLike } from '@/lib/calibration'
-import { completeCalibration, countMissingReadings, deleteCalibration, reopenCalibration } from '@/lib/calibrationActions'
+import { updateRow } from '@/lib/data'
+import { dateOnly, dueState, fmtDate, num, todayISO } from '@/lib/format'
+import { completeCalibration, countIncomplete, deleteCalibration, reopenCalibration, sectionsOf } from '@/lib/calibrationActions'
+import { DEFAULT_TOLERANCE_PCT, equipmentLabel, evaluateRow, fmtNum, fmtPct, overallResult, typeLabel, withinTolerance, type SectionDef } from '@/lib/sheets'
+import { exportCalibrationCsv } from '@/lib/exportCsv'
 import { db } from '@/powersync/db'
 import type { Calibration, CalibrationPoint, Equipment, ReferenceStandard } from '@/powersync/AppSchema'
 
@@ -20,21 +21,23 @@ type Pt = CalibrationPoint & { id: string }
 export function CalibrationEditor() {
   const { id = '' } = useParams()
   const nav = useNavigate()
+  const [saved, setSaved] = useState<string | null>(null)
   const { data: cals, isLoading } = useRows<Cal>('SELECT * FROM calibrations WHERE id = ?', [id])
   const cal = cals[0]
   const { data: eqs } = useRows<Equipment & { id: string; customer_name: string }>(
     'SELECT e.*, c.name AS customer_name FROM equipment e JOIN customers c ON c.id = e.customer_id WHERE e.id = ?',
     [cal?.equipment_id ?? '']
   )
-  const { data: points } = useRows<Pt>('SELECT * FROM calibration_points WHERE calibration_id = ? ORDER BY seq, created_at', [id])
-  const { data: standards } = useRows<ReferenceStandard & { id: string }>('SELECT * FROM reference_standards ORDER BY name COLLATE NOCASE')
   const eq = eqs[0]
+  const { data: points } = useRows<Pt>('SELECT * FROM calibration_points WHERE calibration_id = ? ORDER BY section, seq', [id])
+  const { data: standards } = useRows<ReferenceStandard & { id: string }>('SELECT * FROM reference_standards ORDER BY name COLLATE NOCASE')
 
   if (!cal) return isLoading ? null : <EmptyState title="Calibration not found">It may have been deleted by another technician.</EmptyState>
   const locked = cal.status === 'completed'
+  const sections = eq ? sectionsOf(cal, eq) : []
+  const tol = num(cal.tolerance_pct) ?? DEFAULT_TOLERANCE_PCT
+  const live = overallResult(points, sections, tol)
   const used: string[] = (() => { try { return JSON.parse(cal.standards_used || '[]') } catch { return [] } })()
-  const foundResult = overallAsFound(points as readonly PointLike[])
-  const leftResult = overallAsLeft(points as readonly PointLike[])
   const expiredUsed = standards.filter((s) => used.includes(s.id) && dueState(s.due_at) === 'overdue')
 
   async function toggleStandard(sid: string) {
@@ -42,14 +45,21 @@ export function CalibrationEditor() {
     await updateRow('calibrations', id, { standards_used: JSON.stringify(next) }, { standards_used: cal.standards_used ?? null })
   }
 
-  async function addPoint() {
-    const last = points[points.length - 1]
-    const now = nowISO()
-    await db.execute(
-      `INSERT INTO calibration_points (id, org_id, calibration_id, seq, parameter, units, tolerance_minus, tolerance_plus, created_at, updated_at)
-       VALUES (uuid(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [cal.org_id, id, (last?.seq ?? 0) + 1, last?.parameter ?? null, last?.units ?? eq?.units ?? null, last?.tolerance_minus ?? null, last?.tolerance_plus ?? null, now, now]
-    )
+  async function complete() {
+    // Clicking "Complete" right after typing in a cell: that cell's save is still
+    // queued. Reading through the write queue sees it, so the checks below use the
+    // value just typed rather than what was on screen a moment ago.
+    await new Promise((r) => setTimeout(r, 0))
+    const rows = await db.writeTransaction((tx) => tx.getAll<Pt>('SELECT * FROM calibration_points WHERE calibration_id = ?', [id]))
+    if (overallResult(rows, sections, tol) === null) return alert('Enter at least one applied value with a reading before completing.')
+    const missing = countIncomplete(rows, sections)
+    if (missing && !confirm(`${missing} line${missing === 1 ? ' has' : 's have'} an applied value but a missing run. Complete anyway?`)) return
+    await completeCalibration(id)
+  }
+
+  async function exportCsv() {
+    const r = await exportCalibrationCsv(id)
+    if (r.ok) setSaved(r.filePath ?? 'CSV saved')
   }
 
   const C = { table: 'calibrations', rowId: id } as const
@@ -57,50 +67,49 @@ export function CalibrationEditor() {
   return (
     <>
       <PageHeader
-        back={eq ? <BackLink to={`/equipment/${eq.id}`} label={eq.description ?? 'Equipment'} /> : undefined}
+        back={<BackLink to={`/visits/${cal.visit_id}`} label="Visit" />}
         title={
           <span className="flex items-center gap-3">
-            Calibration <span className="font-mono text-lg text-slate-500">{cal.certificate_number}</span>
+            {typeLabel(eq?.equipment_type)} calibration <span className="font-mono text-lg text-slate-500">{cal.certificate_number}</span>
             {locked ? <Badge tone="green"><CheckCircle2 size={12} />Completed</Badge> : <Badge tone="blue">Draft</Badge>}
           </span>
         }
-        subtitle={eq ? `${eq.customer_name} · ${eq.description}${eq.serial_number ? ` · S/N ${eq.serial_number}` : ''}` : undefined}
+        subtitle={eq ? `${eq.customer_name} · ${equipmentLabel(eq)}` : undefined}
         actions={
           <>
-            <ConfirmDelete what="calibration" onConfirm={async () => { await deleteCalibration(id); nav(eq ? `/equipment/${eq.id}` : '/calibrations') }} />
+            <ConfirmDelete what="calibration" onConfirm={async () => { await deleteCalibration(id); nav(`/visits/${cal.visit_id}`) }} />
+            <Button variant="secondary" onClick={exportCsv}><FileSpreadsheet size={15} />Save CSV</Button>
             <Button variant="secondary" onClick={() => nav(`/calibrations/${id}/certificate`)}><FileText size={15} />Certificate</Button>
             {locked ? (
               <Button variant="secondary" onClick={() => reopenCalibration(id)}><RotateCcw size={15} />Reopen to edit</Button>
             ) : (
-              <Button onClick={() => {
-                const missing = countMissingReadings(points)
-                if (missing && !confirm(`${missing} measurement point${missing === 1 ? ' has' : 's have'} no as-found reading. Complete anyway?`)) return
-                completeCalibration(id)
-              }} disabled={!eq || points.length === 0} title={points.length === 0 ? 'Add at least one measurement point' : undefined}>
-                <CheckCircle2 size={16} />Complete calibration
-              </Button>
+              <Button onClick={complete}><CheckCircle2 size={16} />Complete calibration</Button>
             )}
           </>
         }
       />
 
+      {saved && <div className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800" data-testid="csv-saved">Saved {saved}</div>}
       {locked && (
         <div className="mb-6 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <CheckCircle2 size={16} />
-          Completed {fmtDate(cal.performed_at)}. Next due {fmtDate(cal.due_at)}. Spotted a mistake? Reopen it, correct it, and complete again — the fix syncs to everyone.
+          Completed {fmtDate(cal.performed_at)} · Result <ResultBadge result={cal.result} /> · Next due {fmtDate(cal.due_at)}. Spotted a mistake? Reopen it, correct it, and complete again.
         </div>
       )}
 
       <div className="mb-6 grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Calibration details" />
+          <CardHeader title="Calibration details" actions={eq && <Link to={`/equipment/${eq.id}`} className="text-xs font-medium text-brand-700 hover:underline">Equipment details</Link>} />
           <div className="grid grid-cols-2 gap-4 p-5 md:grid-cols-3">
             <Field label="Date performed"><AutoInput {...C} field="performed_at" value={dateOnly(cal.performed_at) || todayISO()} type="date" boxed disabled={locked} required /></Field>
             <Field label="Due date (blank = by interval)"><AutoInput {...C} field="due_at" value={dateOnly(cal.due_at)} type="date" boxed disabled={locked} /></Field>
+            <Field label="Tolerance (± %)"><AutoInput {...C} field="tolerance_pct" value={cal.tolerance_pct} type="number" step="any" min={0} boxed disabled={locked} required /></Field>
             <Field label="Technician"><AutoInput {...C} field="technician_name" value={cal.technician_name} boxed disabled={locked} /></Field>
-            <Field label="Procedure" className="col-span-2 md:col-span-1"><AutoInput {...C} field="procedure" value={cal.procedure} placeholder="e.g. SOP-PR-001 rev C" boxed disabled={locked} /></Field>
-            <Field label="Temperature (°C)"><AutoInput {...C} field="temperature_c" value={cal.temperature_c} type="number" step="any" boxed disabled={locked} /></Field>
-            <Field label="Humidity (%RH)"><AutoInput {...C} field="humidity_pct" value={cal.humidity_pct} type="number" step="any" boxed disabled={locked} /></Field>
+            <Field label="Procedure"><AutoInput {...C} field="procedure" value={cal.procedure} placeholder="e.g. ASTM E4" boxed disabled={locked} /></Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Temp (°C)"><AutoInput {...C} field="temperature_c" value={cal.temperature_c} type="number" step="any" boxed disabled={locked} /></Field>
+              <Field label="Humidity (%RH)"><AutoInput {...C} field="humidity_pct" value={cal.humidity_pct} type="number" step="any" boxed disabled={locked} /></Field>
+            </div>
             <Field label="Notes" className="col-span-2 md:col-span-3"><AutoTextarea {...C} field="notes" value={cal.notes} disabled={locked} placeholder="Adjustments made, observations, condition as received…" /></Field>
           </div>
         </Card>
@@ -130,86 +139,107 @@ export function CalibrationEditor() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader
-          title="Measurements"
-          subtitle="Pass/fail is calculated from nominal ± tolerance"
-          actions={
-            <div className="flex items-center gap-3 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">As found <ResultBadge result={foundResult} /></span>
-              <span className="flex items-center gap-1.5">As left <ResultBadge result={leftResult} /></span>
-            </div>
-          }
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm" data-testid="points-table">
-            <thead className="bg-slate-50/60 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <div className="mb-3 flex items-center gap-2 text-sm text-slate-600">
+        Result so far (±{tol}%): <ResultBadge result={live} />
+      </div>
+      {sections.map((s) => (
+        <SheetCard key={s.key} section={s} rows={points.filter((p) => p.section === s.key)} tol={tol} locked={locked} />
+      ))}
+      {eq && sections.length === 0 && <EmptyState title="No sheets for this equipment type" />}
+    </>
+  )
+}
+
+function SheetCard({ section: s, rows, tol, locked }: { section: SectionDef; rows: Pt[]; tol: number; locked: boolean }) {
+  const res = overallResult(rows, [s], tol)
+  const u = s.units ? ` (${s.units})` : ''
+  return (
+    <Card className="mb-6">
+      <CardHeader title={s.title} subtitle={`${rows.length} lines · 2 runs`} actions={<ResultBadge result={res} />} />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[820px] text-sm" data-testid={`sheet-${s.key}`}>
+          <thead className="bg-slate-50/60 text-xs font-medium uppercase tracking-wide text-slate-500">
+            {s.kind === 'speed' ? (
               <tr>
                 <th className="w-8 px-3 py-2.5 text-left">#</th>
-                <th className="px-1 py-2.5 text-left">Parameter</th>
-                <th className="w-20 px-1 py-2.5 text-left">Units</th>
-                <th className="w-24 px-1 py-2.5 text-left">Nominal</th>
-                <th className="w-20 px-1 py-2.5 text-left">Tol −</th>
-                <th className="w-20 px-1 py-2.5 text-left">Tol +</th>
-                <th className="w-28 px-1 py-2.5 text-left">Limits</th>
-                <th className="w-24 px-1 py-2.5 text-left">As found</th>
-                <th className="w-16 px-1 py-2.5 text-left"></th>
-                <th className="w-24 px-1 py-2.5 text-left">As left</th>
-                <th className="w-16 px-1 py-2.5 text-left"></th>
-                <th className="w-10" />
+                <th className="px-1 py-2.5 text-left">{s.appliedLabel}{u}</th>
+                <th className="px-1 py-2.5 text-left">R1 time (s)</th>
+                <th className="px-1 py-2.5 text-left">R1 distance{s.lengthUnits ? ` (${s.lengthUnits})` : ''}</th>
+                <th className="px-1 py-2.5 text-left">R1 speed</th>
+                <th className="px-1 py-2.5 text-left">R1 % err</th>
+                <th className="px-1 py-2.5 text-left">R2 time (s)</th>
+                <th className="px-1 py-2.5 text-left">R2 distance{s.lengthUnits ? ` (${s.lengthUnits})` : ''}</th>
+                <th className="px-1 py-2.5 text-left">R2 speed</th>
+                <th className="px-1 py-2.5 text-left">R2 % err</th>
+                <th className="px-1 py-2.5 text-left">R1 − R2 (%)</th>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {points.map((p, i) => <PointRow key={p.id} p={p} index={i} locked={locked} />)}
-            </tbody>
-          </table>
-        </div>
-        {!locked && (
-          <div className="border-t border-slate-100 px-4 py-3">
-            <Button variant="secondary" size="sm" onClick={addPoint}><Plus size={14} />Add measurement point</Button>
-          </div>
-        )}
-        {points.length === 0 && locked && <EmptyState title="No measurements recorded" />}
-      </Card>
-    </>
+            ) : (
+              <tr>
+                <th className="w-8 px-3 py-2.5 text-left">#</th>
+                <th className="px-1 py-2.5 text-left">{s.appliedLabel}{u}</th>
+                <th className="px-1 py-2.5 text-left">Run 1 {s.readingLabel.toLowerCase()}</th>
+                <th className="w-24 px-1 py-2.5 text-left">Run 1 % err</th>
+                <th className="px-1 py-2.5 text-left">Run 2 {s.readingLabel.toLowerCase()}</th>
+                <th className="w-24 px-1 py-2.5 text-left">Run 2 % err</th>
+                <th className="w-28 px-1 py-2.5 text-left">Run 1 − Run 2 (%)</th>
+              </tr>
+            )}
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((p) => <SheetRow key={p.id} p={p} kind={s.kind} tol={tol} locked={locked} />)}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   )
 }
 
 const P = { table: 'calibration_points' } as const
 
-/**
- * One measurement point. Memoized: while a technician types in one row (or a
- * sync updates another), the other rows don't re-render.
- */
-const PointRow = memo(function PointRow({ p, index: i, locked }: { p: Pt; index: number; locked: boolean }) {
-  const l = limits(p as PointLike)
-  const f = judge(p.as_found, p as PointLike)
-  const a = judge(p.as_left, p as PointLike)
-  const pf = percentOfTolerance(p.as_found, p as PointLike)
-  const pa = percentOfTolerance(p.as_left, p as PointLike)
-  const cell = (field: keyof Pt, extra: Record<string, unknown> = {}) => (
-    <AutoInput {...P} rowId={p.id} field={field as string} value={p[field] as string} disabled={locked} {...extra} />
-  )
+/** % error cell, green within tolerance, red outside. */
+function Err({ v, tol, testid }: { v: number | null; tol: number; testid: string }) {
+  const ok = withinTolerance(v, tol)
   return (
-    <tr className="group">
-      <td className="px-3 py-1 text-xs text-slate-400">{i + 1}</td>
-      <td className="px-1 py-1">{cell('parameter', { placeholder: 'e.g. Pressure' })}</td>
-      <td className="px-1 py-1">{cell('units')}</td>
-      <td className="px-1 py-1">{cell('nominal', { type: 'number', step: 'any' })}</td>
-      <td className="px-1 py-1">{cell('tolerance_minus', { type: 'number', step: 'any', min: 0 })}</td>
-      <td className="px-1 py-1">{cell('tolerance_plus', { type: 'number', step: 'any', min: 0, placeholder: '= tol −' })}</td>
-      <td className="px-1 py-1 font-mono text-xs text-slate-500">{l ? `${+l.low.toPrecision(8)} … ${+l.high.toPrecision(8)}` : '—'}</td>
-      <td className="px-1 py-1">{cell('as_found', { type: 'number', step: 'any', className: f === 'fail' ? 'text-red-700 font-medium' : undefined })}</td>
-      <td className="px-1 py-1" title={pf !== null ? `${pf.toFixed(1)}% of tolerance` : undefined}><ResultBadge result={f} /></td>
-      <td className="px-1 py-1">{cell('as_left', { type: 'number', step: 'any', placeholder: 'same', className: a === 'fail' ? 'text-red-700 font-medium' : undefined })}</td>
-      <td className="px-1 py-1" title={pa !== null ? `${pa.toFixed(1)}% of tolerance` : undefined}>{p.as_left ? <ResultBadge result={a} /> : null}</td>
-      <td className="px-1 py-1 text-right">
-        {!locked && (
-          <button onClick={() => deleteRow('calibration_points', p.id)} className="rounded p-1.5 text-slate-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" aria-label="Delete point">
-            <Trash2 size={14} />
-          </button>
-        )}
-      </td>
+    <span data-testid={testid} className={cx('inline-block min-w-14 rounded px-1.5 py-0.5 text-right font-mono text-xs', ok === null ? 'text-slate-300' : ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 font-semibold text-red-700')}>
+      {v === null ? '—' : fmtPct(v)}
+    </span>
+  )
+}
+
+/** One sheet line. Memoized: typing in one line (or a sync updating another)
+ *  doesn't re-render the rest of the sheet. */
+const SheetRow = memo(function SheetRow({ p, kind, tol, locked }: { p: Pt; kind: SectionDef['kind']; tol: number; locked: boolean }) {
+  const r = evaluateRow(p, kind)
+  const tid = (f: string) => `cell-${p.section}-${p.seq}-${f}`
+  const cell = (field: keyof Pt, extra: Record<string, unknown> = {}) => (
+    <AutoInput {...P} rowId={p.id} field={field as string} value={p[field] as string} type="number" step="any" disabled={locked} data-testid={tid(field as string)} aria-label={`${field} line ${p.seq}`} {...extra} />
+  )
+  if (kind === 'speed') {
+    return (
+      <tr>
+        <td className="px-3 py-1 text-xs text-slate-400">{p.seq}</td>
+        <td className="px-1 py-1">{cell('nominal')}</td>
+        <td className="px-1 py-1">{cell('run1_time')}</td>
+        <td className="px-1 py-1">{cell('run1_distance')}</td>
+        <td className="px-1 py-1 font-mono text-xs text-slate-600" data-testid={tid('speed1')}>{fmtNum(r.r1) || '—'}</td>
+        <td className="px-1 py-1"><Err v={r.e1} tol={tol} testid={tid('err1')} /></td>
+        <td className="px-1 py-1">{cell('run2_time')}</td>
+        <td className="px-1 py-1">{cell('run2_distance')}</td>
+        <td className="px-1 py-1 font-mono text-xs text-slate-600" data-testid={tid('speed2')}>{fmtNum(r.r2) || '—'}</td>
+        <td className="px-1 py-1"><Err v={r.e2} tol={tol} testid={tid('err2')} /></td>
+        <td className="px-1 py-1 font-mono text-xs text-slate-600" data-testid={tid('diff')}>{r.diff === null ? '—' : fmtPct(r.diff)}</td>
+      </tr>
+    )
+  }
+  return (
+    <tr>
+      <td className="px-3 py-1 text-xs text-slate-400">{p.seq}</td>
+      <td className="px-1 py-1">{cell('nominal')}</td>
+      <td className="px-1 py-1">{cell('run1')}</td>
+      <td className="px-1 py-1"><Err v={r.e1} tol={tol} testid={tid('err1')} /></td>
+      <td className="px-1 py-1">{cell('run2')}</td>
+      <td className="px-1 py-1"><Err v={r.e2} tol={tol} testid={tid('err2')} /></td>
+      <td className="px-1 py-1 font-mono text-xs text-slate-600" data-testid={tid('diff')}>{r.diff === null ? '—' : fmtPct(r.diff)}</td>
     </tr>
   )
 })

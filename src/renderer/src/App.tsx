@@ -17,6 +17,9 @@ import { CalibrationEditor } from '@/pages/CalibrationEditor'
 import { Certificate } from '@/pages/Certificate'
 import { Standards } from '@/pages/Standards'
 import { Settings } from '@/pages/Settings'
+import { Visits } from '@/pages/Visits'
+import { VisitDetail } from '@/pages/VisitDetail'
+import { ServiceReport } from '@/pages/ServiceReport'
 
 function Centered({ children }: { children: React.ReactNode }) {
   return <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-slate-500">{children}</div>
@@ -63,6 +66,9 @@ function Gate() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
+        <Route path="visits" element={<Visits />} />
+        <Route path="visits/:id" element={<VisitDetail />} />
+        <Route path="visits/:id/report" element={<ServiceReport />} />
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="equipment" element={<EquipmentList />} />

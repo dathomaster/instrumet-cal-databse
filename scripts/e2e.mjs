@@ -74,28 +74,40 @@ async function prepare({ tech2Role = 'technician', seed = '' } = {}) {
   await authAdmin('PUT', `users/${userIds[2]}`, { password: PW })
 }
 
+const T = (n) => `'${n}'`
 const SEED_CONCURRENT = `
   insert into customers(id, org_id, name) values ('c0000000-0000-0000-0000-0000000000e2','${ORG}','Concurrency Co');
-  insert into equipment(id, org_id, customer_id, description) values ('e0000000-0000-0000-0000-0000000000e2','${ORG}','c0000000-0000-0000-0000-0000000000e2','Gauge');
-  insert into calibrations(id, org_id, customer_id, equipment_id, certificate_number, status) values ('ca000000-0000-0000-0000-0000000000e2','${ORG}','c0000000-0000-0000-0000-0000000000e2','e0000000-0000-0000-0000-0000000000e2','CAL-E2E','draft');
-  insert into calibration_points(id, org_id, calibration_id, seq, parameter, nominal, tolerance_minus, as_found) values ('b0000000-0000-0000-0000-0000000000e2','${ORG}','ca000000-0000-0000-0000-0000000000e2',1,'Pressure','1','0.5','1.0');`
-const SEED_EDGE = () => `
-  insert into customers(id, org_id, name) values
-    ('c0000000-0000-0000-0000-0000000000e3','${ORG}','Edge Co'), ('c0000000-0000-0000-0000-0000000000e4','${ORG}','Delete Me Co');
-  insert into equipment(id, org_id, customer_id, description, calibration_interval_days) values
-    ('e0000000-0000-0000-0000-0000000000e3','${ORG}','c0000000-0000-0000-0000-0000000000e3','Edge Gauge',365),
-    ('e0000000-0000-0000-0000-0000000000e4','${ORG}','c0000000-0000-0000-0000-0000000000e4','Delete Me Gauge',365);
+  insert into visits(id, org_id, customer_id) values ('dddddddd-0000-0000-0000-0000000000e2','${ORG}','c0000000-0000-0000-0000-0000000000e2');
+  insert into equipment(id, org_id, customer_id, equipment_type, model, serial_number, capacity, units) values ('e0000000-0000-0000-0000-0000000000e2','${ORG}','c0000000-0000-0000-0000-0000000000e2','load_cell','LC','LC-C',10,'kN');
+  insert into calibrations(id, org_id, customer_id, equipment_id, visit_id, config, certificate_number, status) values ('ca000000-0000-0000-0000-0000000000e2','${ORG}','c0000000-0000-0000-0000-0000000000e2','e0000000-0000-0000-0000-0000000000e2','dddddddd-0000-0000-0000-0000000000e2','{"modes":["tension"]}','CAL-E2E','draft');
+  insert into calibration_points(id, org_id, calibration_id, section, seq, nominal, run1) values ('b0000000-0000-0000-0000-0000000000e2','${ORG}','ca000000-0000-0000-0000-0000000000e2','tension',1,'10','10.0');`
+const SEED_EDGE = () => {
+  const today = T(localToday())
+  return `
+  insert into customers(id, org_id, name, contact_name, phone, email, city) values
+    ('c0000000-0000-0000-0000-0000000000e3','${ORG}','Edge Co','Pat Lee','555-0199','pat@edge.test','Springfield'),
+    ('c0000000-0000-0000-0000-0000000000e4','${ORG}','Delete Me Co',null,null,null,null);
+  insert into visits(id, org_id, customer_id, visit_date, location) values
+    ('dddddddd-0000-0000-0000-0000000000e3','${ORG}','c0000000-0000-0000-0000-0000000000e3',${today},'Test Lab'),
+    ('dddddddd-0000-0000-0000-0000000000e5','${ORG}','c0000000-0000-0000-0000-0000000000e3',${today},'Test Lab'),
+    ('dddddddd-0000-0000-0000-0000000000e4','${ORG}','c0000000-0000-0000-0000-0000000000e4',${today},'Test Lab');
+  insert into equipment(id, org_id, customer_id, equipment_type, model, serial_number, indicator_model, indicator_serial, calibration_interval_days) values
+    ('e0000000-0000-0000-0000-0000000000e5','${ORG}','c0000000-0000-0000-0000-0000000000e3','crosshead','Edge Frame','F-1','Ind','I-1',365);
+  insert into equipment(id, org_id, customer_id, equipment_type, model, serial_number, capacity, units, test_frame_id, calibration_interval_days) values
+    ('e0000000-0000-0000-0000-0000000000e3','${ORG}','c0000000-0000-0000-0000-0000000000e3','load_cell','EDGE-LC','LC-E3',50,'kN','e0000000-0000-0000-0000-0000000000e5',365),
+    ('e0000000-0000-0000-0000-0000000000e4','${ORG}','c0000000-0000-0000-0000-0000000000e4','load_cell','Delete Me Gauge','DM-1',5,'kN',null,365);
   insert into reference_standards(id, org_id, name, serial_number, certificate_number, due_at) values
     ('f0000000-0000-0000-0000-0000000000e3','${ORG}','Edge Calibrator','S-1','C-1','2027-06-30');
-  insert into calibrations(id, org_id, customer_id, equipment_id, certificate_number, status, performed_at, standards_used) values
-    ('ca000000-0000-0000-0000-0000000000e3','${ORG}','c0000000-0000-0000-0000-0000000000e3','e0000000-0000-0000-0000-0000000000e3','CAL-EDGE-MAIN','draft','${localToday()}','["f0000000-0000-0000-0000-0000000000e3"]'),
-    ('ca000000-0000-0000-0000-0000000000e4','${ORG}','c0000000-0000-0000-0000-0000000000e3','e0000000-0000-0000-0000-0000000000e3','CAL-EDGE-EMPTY','draft','${localToday()}','[]'),
-    ('ca000000-0000-0000-0000-0000000000e5','${ORG}','c0000000-0000-0000-0000-0000000000e3','e0000000-0000-0000-0000-0000000000e3','CAL-EDGE-DOOMED','draft','${localToday()}','[]'),
-    ('ca000000-0000-0000-0000-0000000000e6','${ORG}','c0000000-0000-0000-0000-0000000000e4','e0000000-0000-0000-0000-0000000000e4','CAL-EDGE-DEL','draft','${localToday()}','[]');
-  insert into calibration_points(id, org_id, calibration_id, seq, parameter, nominal, tolerance_minus, as_found) values
-    ('b0000000-0000-0000-0000-0000000000e3','${ORG}','ca000000-0000-0000-0000-0000000000e3',1,'Pressure','10','1','10.2'),
-    ('b0000000-0000-0000-0000-0000000000e4','${ORG}','ca000000-0000-0000-0000-0000000000e4',1,'Pressure','5','1',null),
-    ('b0000000-0000-0000-0000-0000000000e6','${ORG}','ca000000-0000-0000-0000-0000000000e6',1,'Pressure','5','1','5');`
+  insert into calibrations(id, org_id, customer_id, equipment_id, visit_id, config, certificate_number, status, performed_at, standards_used) values
+    ('ca000000-0000-0000-0000-0000000000e3','${ORG}','c0000000-0000-0000-0000-0000000000e3','e0000000-0000-0000-0000-0000000000e3','dddddddd-0000-0000-0000-0000000000e3','{"modes":["tension"]}','CAL-EDGE-MAIN','draft',${today},'["f0000000-0000-0000-0000-0000000000e3"]'),
+    ('ca000000-0000-0000-0000-0000000000e4','${ORG}','c0000000-0000-0000-0000-0000000000e3','e0000000-0000-0000-0000-0000000000e3','dddddddd-0000-0000-0000-0000000000e3','{"modes":["tension"]}','CAL-EDGE-EMPTY','draft',${today},'[]'),
+    ('ca000000-0000-0000-0000-0000000000e6','${ORG}','c0000000-0000-0000-0000-0000000000e4','e0000000-0000-0000-0000-0000000000e4','dddddddd-0000-0000-0000-0000000000e4','{"modes":["tension"]}','CAL-EDGE-DEL','draft',${today},'[]');
+  insert into calibration_points(org_id, calibration_id, section, seq, nominal, run1, run2) values
+    ('${ORG}','ca000000-0000-0000-0000-0000000000e3','tension',1,'10','10.05','9.98'),
+    ('${ORG}','ca000000-0000-0000-0000-0000000000e3','tension',2,'20','20.1','20.04'),
+    ('${ORG}','ca000000-0000-0000-0000-0000000000e4','tension',1,'5','5.01',null),
+    ('${ORG}','ca000000-0000-0000-0000-0000000000e6','tension',1,'5','5','5');`
+}
 
 const PREP = {
   sync: () => prepare(),

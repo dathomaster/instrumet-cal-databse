@@ -1,15 +1,40 @@
 # Instrumet Calibration
 
-Offline-first desktop app for calibration technicians. Add customers, their
-equipment, reference standards and calibration results with or without an
-internet connection. Everything is saved on the laptop first and syncs
+Offline-first desktop app for calibration technicians: visits, customers, load
+cells, extensometers and crossheads, with calibration sheets, CSV export and
+service reports, with or without an internet connection. Everything is saved on the laptop first and syncs
 automatically. When one technician fixes a mistake, every other technician sees
 the change within seconds.
 
 **Stack:** Electron · React · Tailwind · [PowerSync](https://powersync.com)
 (local SQLite + sync) · [Supabase](https://supabase.com) (Postgres, Auth)
 
-![Calibration editor](docs/screenshots/04-calibration-offline.png)
+## Workflow
+
+1. **New visit**: pick the customer from the list, or add one (company name, street,
+   city, state, ZIP, specific location (defaults to **Test Lab**), contact name, phone, email).
+2. In the visit, **Start new calibration**: pick the customer's equipment or add it.
+3. Choose the options, and the sheets are created:
+
+| Equipment | Fields | Options | Sheets |
+|---|---|---|---|
+| **Load cell** | Device model, SN, capacity + units, test frame (one of the customer's crossheads) | Tension / Compression / Both | 20 lines each: Applied · Indicated · % error, Run 1 and Run 2 |
+| **Extensometer** | Device model, SN, gauge length + units | — | 20 lines: Device · Indicated · % error, Run 1 and Run 2 |
+| **Crosshead** | Machine model + SN, indicating device model + SN | Speed / Displacement / Both · Up / Down / Both · in / mm | Displacement: 5 lines of Applied · Actual · % error. Speed: 5 lines of Target · Time · Distance · Speed · % error. Run 1 and Run 2 each |
+
+4. **Save CSV** on a calibration exports everything: customer + contact, location, visit
+   and calibration dates, technician, equipment and test-frame details, standards used,
+   tolerance, result, and every filled line with both runs.
+5. The visit's **Service report** lists the calibrations performed plus the notes
+   (maintenance performed / concerns), ready to print or save as PDF.
+
+**Maths** (`src/renderer/src/lib/sheets.ts`, unit-tested):
+* % error = (Indicated − Applied) ÷ Applied × 100
+* Crosshead speed = Distance ÷ Time(s) × 60 (per minute); % error against the target speed
+* Run difference = Run 1 % error − Run 2 % error (= (Run 1 − Run 2) ÷ Applied × 100)
+* Pass when |% error| ≤ the calibration's tolerance (default ±1.0%, editable); the
+  calibration fails if any run of any line fails.
+* A new calibration copies the applied values from that equipment's last completed calibration.
 
 ## How sync works
 
@@ -110,7 +135,8 @@ repo's public Releases; if the repo is made private, the update host must change
 | `src/main/` | Electron main process (secure `app://` scheme, CSP, Save-as-PDF) |
 | `src/renderer/src/powersync/` | Client schema, database, Supabase connector (`uploadData`, `fetchCredentials`) |
 | `src/renderer/src/pages/` | Screens |
-| `tests/unit/` | Fast unit tests (pass/fail math, dates, upload error rules) |
+| `src/renderer/src/lib/sheets.ts` · `csv.ts` | Sheet definitions + maths, CSV export (pure, unit-tested) |
+| `tests/unit/` | Fast unit tests (sheets maths, CSV, dates, upload error rules) |
 | `tests/e2e/` + `scripts/e2e.mjs` | End-to-end tests driving real app windows against Supabase + PowerSync |
 | `.github/workflows/release.yml` | Builds + publishes the Windows installer when a `v*` tag is pushed |
 
@@ -139,9 +165,9 @@ data. Screenshots land in `test-results/`.
 
 | Suite | What it proves |
 |---|---|
-| `sync` | Live sync between laptops, offline work, reconnect, live corrections, restart offline |
+| `sync` | The whole workflow through the UI on two laptops: visit + new customer, crosshead (speed + displacement), load cell on that frame offline, reconnect, live correction, restart offline |
 | `concurrent` | Two people on the same field: no silent overwrite; last real edit wins |
-| `edge` | One app copy at a time; required fields; empty-reading warning; date corrections recompute due dates; certificates keep standards as of completion; offline cascade deletes; edits to deleted records are set aside without blocking the queue |
+| `edge` | One app copy at a time; required fields; missing-run warning; date corrections recompute due dates; **CSV file contents**; certificates keep standards as of completion; **service report**; offline cascade deletes; work in a visit a colleague deleted is set aside without blocking the queue |
 | `auth` | Approval, sign-out and sign-in while offline, restart offline, automatic resume |
 | `admin` | Set password, change password, remove a technician |
 

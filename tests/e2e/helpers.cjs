@@ -48,6 +48,7 @@ function setNetwork(online) {
 }
 
 // ---- App control ------------------------------------------------------------
+const launched = [] // for failure screenshots
 async function launch(name, { viaRelay = false } = {}) {
   const app = await electron.launch({
     executablePath: ELECTRON,
@@ -55,6 +56,7 @@ async function launch(name, { viaRelay = false } = {}) {
   })
   const page = await app.firstWindow()
   page.on('pageerror', (e) => console.log(`  [${name} pageerror]`, e.message))
+  launched.push({ name, page })
   if (viaRelay) {
     await relayReady
     const port = relayServer.address().port
@@ -81,7 +83,15 @@ const shot = (c, n) => SHOTS && c.page.screenshot({ path: path.join(SHOTS, n + '
 function run(name, body) {
   body()
     .then(() => { log(`ALL ${name} CHECKS PASSED`); relayServer.close(); process.exit(0) })
-    .catch((e) => { console.error(`E2E FAILED (${name}):`, e.message); process.exit(1) })
+    .catch(async (e) => {
+      console.error(`E2E FAILED (${name}):`, e.message.split('\n')[0])
+      const dir = SHOTS || TMPROOT
+      for (const l of launched) {
+        const file = path.join(dir, `FAIL-${name}-${l.name}.png`)
+        if (await l.page.screenshot({ path: file }).then(() => true, () => false)) console.error(`  screenshot: ${file}`)
+      }
+      process.exit(1)
+    })
 }
 function check(cond, msg) { if (!cond) throw new Error(msg) }
 

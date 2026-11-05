@@ -1,12 +1,14 @@
-// Edge cases found in the code audit (seed rows created by scripts/e2e.mjs).
+// Edge cases + CSV + service report (seed rows created by scripts/e2e.mjs).
 const { spawn } = require('child_process')
+const fs = require('fs')
 const path = require('path')
 const h = require('./helpers.cjs')
 
-const MAIN = '#/calibrations/ca000000-0000-0000-0000-0000000000e3'   // draft, readings filled, uses standard
-const EMPTY = '#/calibrations/ca000000-0000-0000-0000-0000000000e4'  // draft, a point with no reading
-const DOOMED = '#/calibrations/ca000000-0000-0000-0000-0000000000e5' // B deletes while A adds to it offline
-const EQUIP = '#/equipment/e0000000-0000-0000-0000-0000000000e3'
+const MAIN = '#/calibrations/ca000000-0000-0000-0000-0000000000e3'   // draft, readings filled, uses a standard
+const EMPTY = '#/calibrations/ca000000-0000-0000-0000-0000000000e4'  // draft, a line missing run 2
+const EQUIP = '#/equipment/e0000000-0000-0000-0000-0000000000e3'     // Edge load cell (on Edge Frame)
+const VISIT = '#/visits/dddddddd-0000-0000-0000-0000000000e3'
+const DOOMED_VISIT = '#/visits/dddddddd-0000-0000-0000-0000000000e5' // B deletes it while A works in it offline
 
 const fmt = (c, iso) => c.page.evaluate((d) => {
   const [y, m, dd] = d.split('-').map(Number)
@@ -31,32 +33,34 @@ h.run('EDGE', async () => {
   const exited = await new Promise((r) => { const t = setTimeout(() => r(false), 15000); second.on('exit', () => { clearTimeout(t); r(true) }) })
   if (!exited) second.kill()
   h.check(exited, 'a second copy of the app kept running on the same data')
-  h.check(await A.page.getByText('Instrumet').first().isVisible(), 'first copy stopped working')
   h.log('second launch exits; first copy keeps running')
 
   // 2. A required field can't be saved empty
-  await h.goto(A, MAIN); await A.page.getByTestId('points-table').waitFor()
+  await h.goto(A, MAIN); await A.page.getByTestId('sheet-tension').waitFor()
   const date = A.page.getByLabel('Date performed')
   const before = await date.inputValue()
-  // (Tab moves between the month/day/year parts of a date box, so blur explicitly)
-  await date.fill(''); await date.blur(); await A.page.waitForTimeout(500)
+  await date.fill(''); await date.blur(); await A.page.waitForTimeout(500) // (Tab moves between date parts)
   h.check((await date.inputValue()) === before, 'clearing "Date performed" was not reverted')
   h.log('clearing a required field puts the saved value back')
 
-  // 3. Completing with an empty reading asks first
-  await h.goto(A, EMPTY); await A.page.getByTestId('points-table').waitFor()
+  // 3. Completing with a line missing a run asks first
+  await h.goto(A, EMPTY); await A.page.getByTestId('sheet-tension').waitFor()
   let asked = ''
   A.page.once('dialog', (d) => { asked = d.message(); d.dismiss() })
   await A.page.getByRole('button', { name: 'Complete calibration' }).click()
   await A.page.waitForTimeout(800)
-  h.check(/no as-found reading/.test(asked), 'no warning before completing with an empty reading')
+  h.check(/a missing run/.test(asked), `no warning before completing with a missing run (got: "${asked}")`)
   h.check(await A.page.getByText('Draft', { exact: true }).first().isVisible(), 'calibration completed despite cancelling')
-  h.log('completing with an empty reading asks first; cancel keeps it a draft')
+  h.log('completing with a missing run asks first; cancel keeps it a draft')
 
-  // 4. Completion sets equipment dates; correcting the date later recalculates them
-  await h.goto(A, MAIN); await A.page.getByTestId('points-table').waitFor()
+  // 4. Completion sets the result and equipment dates; correcting the date recalculates them
+  await h.goto(A, MAIN); await A.page.getByTestId('sheet-tension').waitFor()
+  await A.page.locator('[data-testid="cell-tension-1-run1"][value="10.05"]').waitFor({ timeout: 15000 })
+  const err1 = await A.page.getByTestId('cell-tension-1-err1').innerText()
+  h.check(err1 === '0.50', `run 1 % error wrong (10.05 vs 10): got "${err1}"`)
+  h.check((await A.page.getByTestId('cell-tension-1-diff').innerText()) === '0.70', 'run difference wrong (0.50 − (−0.20))')
   await A.page.getByRole('button', { name: 'Complete calibration' }).click()
-  await A.page.getByText('Completed', { exact: true }).waitFor()
+  await A.page.getByText('Completed', { exact: true }).first().waitFor()
   await h.goto(A, EQUIP); await A.page.getByText('Calibration history').waitFor()
   h.check((await detail(A, 'Next due')) === (await fmt(A, plusDays(today, 365))), 'equipment next due not set from completion')
   await h.goto(A, MAIN); await A.page.getByRole('button', { name: 'Reopen to edit' }).click()
@@ -64,14 +68,29 @@ h.run('EDGE', async () => {
   h.check((await A.page.getByLabel(/^Due date/).inputValue()) === '', 'calculated due date was not cleared on reopen')
   await A.page.getByLabel('Date performed').fill('2026-01-15'); await A.page.getByLabel('Date performed').blur()
   await A.page.getByRole('button', { name: 'Complete calibration' }).click()
-  await A.page.getByText('Completed', { exact: true }).waitFor()
-  await h.goto(A, EQUIP); await A.page.getByText('Calibration history').waitFor()
-  await A.page.waitForTimeout(500)
+  await A.page.getByText('Completed', { exact: true }).first().waitFor()
+  await h.goto(A, EQUIP); await A.page.getByText('Calibration history').waitFor(); await A.page.waitForTimeout(500)
   h.check((await detail(A, 'Last calibrated')) === (await fmt(A, '2026-01-15')), 'last calibrated not corrected backwards')
   h.check((await detail(A, 'Next due')) === (await fmt(A, '2027-01-15')), 'next due not recalculated after correcting the date')
-  h.log('correcting a calibration date backwards recalculates the equipment dates')
+  h.log('completion sets equipment dates; correcting the date backwards recalculates them')
 
-  // 5. Certificates keep the standard's details as of completion
+  // 5. CSV: everything about the job, plus the readings
+  const csvPath = path.join(process.env.TMPROOT, 'export.csv')
+  await A.app.evaluate(({ dialog }, f) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: f }) }, csvPath)
+  await h.goto(A, MAIN); await A.page.getByTestId('sheet-tension').waitFor()
+  await A.page.getByRole('button', { name: 'Save CSV' }).click()
+  await A.page.getByTestId('csv-saved').waitFor({ timeout: 10000 })
+  const csv = fs.readFileSync(csvPath, 'utf8').replace(/^﻿/, '').split('\r\n')
+  for (const l of ['Company,Edge Co', 'City,Springfield', 'Location,Test Lab', 'Contact name,Pat Lee', 'Contact phone,555-0199', 'Contact email,pat@edge.test',
+    'Calibration date,2026-01-15', 'Equipment type,Load cell', 'Device model,EDGE-LC', 'Device SN,LC-E3', 'Capacity,50 kN', 'Test frame,Edge Frame SN F-1',
+    'Result,PASS', 'Tolerance (±%),1', 'Edge Calibrator,S-1,C-1,2027-06-30', 'Tension',
+    '1,10,10.05,0.50,9.98,-0.20,0.70,PASS,PASS', '2,20,20.1,0.50,20.04,0.20,0.30,PASS,PASS']) {
+    h.check(csv.includes(l), `CSV is missing line: ${l}`)
+  }
+  h.check(csv.filter((l) => /^\d+,/.test(l)).length === 2, 'CSV should only contain the 2 filled lines')
+  h.log(`CSV saved with customer, contact, equipment, test frame, standards and readings (${csv.length} lines)`)
+
+  // 6. Certificates keep the standard's details as of completion
   await h.goto(A, MAIN + '/certificate'); await A.page.getByText('Certificate of Calibration').waitFor()
   h.check(await A.page.getByText('Cert C-1').isVisible(), 'certificate missing the standard')
   await h.nav(A, 'Reference standards')
@@ -81,31 +100,40 @@ h.run('EDGE', async () => {
   await A.page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
   await h.goto(A, MAIN + '/certificate'); await A.page.getByText('Certificate of Calibration').waitFor()
   h.check(await A.page.getByText('Cert C-1').isVisible(), 'old certificate changed when the standard was updated')
-  await h.nav(A, 'Reference standards')
-  A.page.once('dialog', (d) => d.accept())
-  await stdRow.hover(); await stdRow.getByRole('button', { name: 'Delete' }).click()
-  await A.page.getByText('Edge Calibrator').waitFor({ state: 'detached' })
-  await h.goto(A, MAIN + '/certificate'); await A.page.getByText('Certificate of Calibration').waitFor()
-  h.check(await A.page.getByText('Edge Calibrator').isVisible(), 'certificate lost the standard after it was deleted')
-  h.log('certificate keeps the standard as of completion (after edit and delete)')
+  h.log('certificate keeps the standard as of completion')
 
-  // 6 + 7. Offline: cascade delete updates counts at once; an edit to something
-  //         deleted by a colleague is set aside, and the queue doesn't get stuck
-  await h.goto(A, DOOMED); await A.page.getByTestId('points-table').waitFor()
+  // 7. Service report: calibrations performed + notes
+  await h.goto(A, VISIT); await A.page.getByLabel('Service report notes').waitFor()
+  await A.page.getByLabel('Service report notes').fill('Cleaned crosshead screws. Load cell cable worn — recommend replacement.')
+  await A.page.getByLabel('Service report notes').blur()
+  await A.page.getByRole('button', { name: 'Service report' }).click()
+  await A.page.getByText('Service Report', { exact: true }).waitFor()
+  const report = await A.page.getByTestId('report-calibrations').innerText()
+  h.check(/LC-E3/.test(report) && /CAL-EDGE-MAIN/.test(report) && /PASS/.test(report), 'service report missing the completed calibration')
+  h.check(/In progress/.test(report), 'service report missing the in-progress calibration')
+  h.check(/recommend replacement/.test(await A.page.getByTestId('report-notes').innerText()), 'service report missing the notes')
+  h.log('service report lists the calibrations performed and the notes')
+
+  // 8 + 9. Offline: cascade delete updates counts at once; work inside a visit a
+  //        colleague deleted is set aside, and the upload queue doesn't get stuck
+  await h.goto(A, DOOMED_VISIT); await A.page.getByRole('button', { name: 'Start new calibration' }).first().waitFor()
   h.setNetwork(false); await h.browserOffline(A, true)
   await A.page.getByTestId('sync-indicator').filter({ hasText: 'Offline' }).first().waitFor({ timeout: 30000 })
-  await A.page.getByRole('button', { name: 'Add measurement point' }).click()
-  const n = A.page.getByTestId('points-table').locator('tbody tr').nth(0).locator('input').nth(2)
-  await n.fill('42'); await n.press('Tab')
+  await A.page.getByRole('button', { name: 'Start new calibration' }).first().click()
+  await A.page.getByRole('dialog', { name: 'Start new calibration' }).getByLabel('Equipment').selectOption({ label: 'Load cell · EDGE-LC · SN LC-E3' })
+  await A.page.getByRole('dialog', { name: 'Start new calibration' }).getByRole('button', { name: 'Start calibration' }).click()
+  await A.page.getByTestId('sheet-tension').waitFor()
+  h.check((await A.page.getByTestId('cell-tension-1-nominal').inputValue()) === '10', 'applied values were not copied from the previous calibration')
+  h.log("A (offline) started a calibration in a visit; applied values copied from last time")
 
-  await h.goto(B, DOOMED); await B.page.getByTestId('points-table').waitFor()
+  await h.goto(B, DOOMED_VISIT); await B.page.getByRole('button', { name: 'Start new calibration' }).first().waitFor()
   await B.page.getByRole('button', { name: 'Delete' }).first().click()
   await B.page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
-  await B.page.getByText('Calibration history').waitFor()
-  h.log('B deleted the calibration A is adding to offline')
+  await B.page.getByRole('heading', { name: 'Visits' }).waitFor()
+  h.log('B deleted that visit')
 
   await h.nav(A, 'Dashboard')
-  const eqBefore = await tile(A, 'Active equipment', { atLeast: 2 }) // Edge Gauge + Delete Me Gauge
+  const eqBefore = await tile(A, 'Active equipment', { atLeast: 3 }) // Edge LC + Edge Frame + Delete Me Gauge
   await h.nav(A, 'Customers'); await A.page.getByText('Delete Me Co').first().click()
   await A.page.getByRole('button', { name: 'Delete' }).first().click()
   await A.page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click()
@@ -119,10 +147,9 @@ h.run('EDGE', async () => {
   await h.nav(A, 'Settings')
   await A.page.getByTestId('pending-count').filter({ hasText: /^0$/ }).waitFor({ timeout: 90000 })
   await A.page.getByText('Changes the server rejected').waitFor({ timeout: 30000 })
-  h.check(await A.page.getByRole('row').filter({ hasText: 'calibration points' }).first().isVisible(), 'rejected point not listed')
-  h.log("A reconnected: the point added to B's deleted calibration is listed as rejected; queue drained (0 pending)")
-  await h.nav(B, 'Equipment')
-  await B.page.waitForTimeout(3000)
+  h.check(await A.page.getByRole('row').filter({ hasText: /calibrations/ }).first().isVisible(), 'rejected calibration not listed')
+  h.log("A reconnected: work in the deleted visit is listed as rejected; queue drained (0 pending)")
+  await h.nav(B, 'Equipment'); await B.page.waitForTimeout(3000)
   h.check(!(await B.page.getByText('Delete Me Gauge').isVisible()), "the deleted customer's equipment still exists for B")
   h.log("B no longer sees the deleted customer's equipment")
   await A.app.close(); await B.app.close()

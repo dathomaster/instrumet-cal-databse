@@ -4,6 +4,7 @@ export interface DesktopBridge {
   platform: string
   printToPDF: (name: string) => Promise<{ ok: boolean; filePath?: string }>
   installUpdate: () => Promise<void>
+  saveTextFile: (suggestedName: string, content: string) => Promise<{ ok: boolean; filePath?: string }>
   onUpdateReady: (cb: (version: string) => void) => () => void
 }
 

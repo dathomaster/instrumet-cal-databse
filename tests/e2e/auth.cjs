@@ -19,7 +19,7 @@ h.run('AUTH', async () => {
   h.setNetwork(false); await h.browserOffline(A, true)
   await A.page.getByTestId('sync-indicator').filter({ hasText: 'Offline' }).first().waitFor({ timeout: 30000 })
   await A.page.getByRole('button', { name: 'New customer' }).first().click()
-  await A.page.getByRole('dialog').getByLabel('Company / customer name *').fill('Offline Customer Co')
+  await A.page.getByRole('dialog').getByLabel('Company name *').fill('Offline Customer Co')
   await A.page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
   await A.page.getByRole('heading', { name: 'Offline Customer Co' }).waitFor()
   await h.nav(A, 'Settings')
